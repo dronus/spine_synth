@@ -1,23 +1,17 @@
 #include <Audio.h>
-#include <Wire.h>
-#include <SPI.h>
-#include <SD.h>
-#include <SerialFlash.h>
 #include <math.h> 
 
 
 // GUItool: begin automatically generated code
-//AudioInputUSB            usb1;           //xy=138,124
 AudioSynthWaveformDc     dc1;
 AudioEffectEnvelope      env1;
 AudioEffectEnvelope      env2;
 AudioEffectMultiply      mult1;
 AudioSynthWaveform       osc1;
-AudioFilterStateVariable filter1;        //xy=340,125
-AudioFilterStateVariable filter2;        //xy=343,180
-AudioOutputAnalog        dac1;           //xy=546,73
-AudioOutputUSB           usb2;           //xy=548,127
-//AudioConnection          patchCord0(osc1, 0, env1, 0);
+AudioFilterStateVariable filter1;
+AudioFilterStateVariable filter2;
+AudioOutputAnalog        dac1;
+AudioOutputUSB           usb2;
 AudioConnection          patchCord3(dc1, 0, env1, 0);
 AudioConnection          patchCord31(dc1, 0, env2, 0);
 AudioConnection          patchCord0(osc1, 0, filter1, 0);
@@ -45,10 +39,7 @@ void setup(void)
   pinMode(23,INPUT_PULLDOWN);
   pinMode(13,OUTPUT);
 
-//  AudioMemory(30);
-  Serial.println("setup done");
   Serial.begin(9600);
-//  while (!Serial) ;
 
   AudioMemory(30);
   dc1.amplitude(1.0);
@@ -56,7 +47,7 @@ void setup(void)
   osc1.pulseWidth(0.5);
   osc1.frequency(440.0);
   osc1.amplitude(1.0);
-  Serial.println("setup done");
+  Serial.println("spine_synth running.");
 }
  
 long last_time;
@@ -111,14 +102,10 @@ void loop()
   float volume=analogs_slow[3]+analogs_slow[4];
   float frequency=(analogs_slow[3]-analogs_slow[4])/volume+1.0f;
   frequency*=100.0f;
-  // Serial.print("f:");  Serial.print(frequency); Serial.println();
 
   volume-=14000.0f;
   if(volume<0.f) volume=0.f;
   volume/=5000.0f;
-
-
-  // int cycle_length=analogs_slow[0];
 
   long time=millis();
   long dt=time-last_time;
@@ -152,7 +139,6 @@ void loop()
     env1.attack(cycle_length*0.5);
     env1.sustain(volumes[step]);
     env2.sustain(volumes[step]);
-//osc1.amplitude(volumes[step]);
     
     if(volumes[step]>0) { env1.noteOn();  env2.noteOn(); }
     else                { env1.noteOff(); env2.noteOff();}
