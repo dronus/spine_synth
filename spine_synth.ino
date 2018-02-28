@@ -37,6 +37,12 @@ void setup(void)
 {
   pinMode(22,INPUT_PULLDOWN);
   pinMode(23,INPUT_PULLDOWN);
+  pinMode(17,INPUT_PULLUP);
+  pinMode(15,INPUT_PULLUP);
+  pinMode(14,INPUT_PULLUP);
+
+  pinMode(18,OUTPUT);
+  pinMode(16,OUTPUT);
   pinMode(13,OUTPUT);
 
   Serial.begin(9600);
@@ -51,15 +57,16 @@ void setup(void)
 }
  
 long last_time;
-bool digitals_last[2];
-bool digitals_click[2];
+bool digitals_last[5];
+bool digitals_click[5];
 float analogs_slow[]={0.,0.,0.,0.,0.,0.};
 float last_volume=0.;
 int cycle=0;
 int cycle_length=150;
 int step =0;
 float frequencies[16];
-float volumes[16];
+bool accents[16];
+bool slides[16];
 
 long last_tap=0;
 
@@ -70,13 +77,15 @@ float quantize(float f)
   return exp2(floor(log2(f)*12.0f)/12.0f);
 }
 
+float accent_integral=0.f;
+
 void loop()
 {
 
-  bool digitals[]={digitalRead(22),digitalRead(23)};
-  for(int i=0;i<2; i++)
+  bool digitals[]={!digitalRead(17),!digitalRead(15),!digitalRead(14),digitalRead(22),digitalRead(23)};
+  for(int i=0;i<5; i++)
   {
-    digitals_click[i]=(!digitals_last[i] && digitals[i]);
+    digitals_click[i]=digitals_click[i] || (digitals[i] && !digitals_last[i]);
     digitals_last[i]=digitals[i];
   }
 
@@ -105,15 +114,15 @@ void loop()
 
   volume-=14000.0f;
   if(volume<0.f) volume=0.f;
-  volume/=5000.0f;
 
   long time=millis();
   long dt=time-last_time;
   last_time = time;
 
   // tap tempo
-  if(digitals_click[0])
+  if(digitals_click[2])
   {
+    digitals_click[2]=false;
     long four_bars=time-taps[3];
     cycle_length=four_bars/16;
 
@@ -127,31 +136,50 @@ void loop()
     step++;
     step=step % 16;
 
+    if(digitals_click[0]) accents[step]=!accents[step];
+    digitals_click[0]=false;
+    if(digitals_click[1]) slides [step]=!slides [step];
+    digitals_click[1]=false;
     if(volume>0){
       frequencies[step]=quantize(frequency);
-      volumes[step]=volume;
+      if(digitals[0]) accents[step]=true;
+      if(digitals[1]) slides [step]=true;
     }
-    if(digitals[1]) 
-      volumes[step]=0;
 
-    osc1.frequency  (frequencies[step]);
 
-    env1.attack(cycle_length*0.5);
-    env1.sustain(volumes[step]);
-    env2.sustain(volumes[step]);
+//      volumes[step]=volume;
+
+    if(digitals[4]) {
+      frequencies[step]=0;
+      accents[step]=false;
+      slides [step]=false;
+    }
+
+    osc1.frequency(frequencies[step]);
+
+    accent_integral*=0.7f;
+    if(accents[step]) accent_integral+=0.3f;
+    if(accent_integral>1.0f) accent_integral=1.0f;
+
+    Serial.println(accent_integral);
+
+    env1.attack(cycle_length*0.5f);
+    env2.sustain(accent_integral*0.5f+0.5f);
     
-    if(volumes[step]>0) { env1.noteOn();  env2.noteOn(); }
-    else                { env1.noteOff(); env2.noteOff();}
+    if(frequencies[step]>0) { env1.noteOn();  env2.noteOn(); }
+    else                    { env1.noteOff(); env2.noteOff();}
 
     digitalWrite(13,step%4==0);
+    digitalWrite(18,accents[step]);
+    digitalWrite(16,slides [step]);
 
     cycle-=cycle_length;
   }
 
 
   AudioNoInterrupts();
-  filter1.octaveControl(analogs_slow[1]*5.0f/1024.0f);
-  filter2.octaveControl(analogs_slow[1]*5.0f/1024.0f);
+  filter1.octaveControl(analogs_slow[1]/1024.0f*(1.f+accent_integral)*5.0f);
+  filter2.octaveControl(analogs_slow[1]/1024.0f*(1.f+accent_integral)*5.0f);
   filter1.resonance(analogs_slow[2]*5.0f/1024.0f);
   filter2.resonance(analogs_slow[2]*5.0f/1024.0f);
   filter1.frequency((1024.f-analogs_slow[0])*4.0f);
