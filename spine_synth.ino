@@ -112,7 +112,7 @@ void loop()
   float frequency=(analogs_slow[3]-analogs_slow[4])/volume+1.0f;
   frequency*=100.0f;
 
-  volume-=14000.0f;
+  volume-=20000.0f;
   if(volume<0.f) volume=0.f;
 
   long time=millis();
@@ -132,22 +132,24 @@ void loop()
   }
 
   cycle+=dt;
+
   if(cycle>cycle_length){
-    step++;
-    step=step % 16;
 
     if(digitals_click[0]) accents[step]=!accents[step];
     digitals_click[0]=false;
     if(digitals_click[1]) slides [step]=!slides [step];
     digitals_click[1]=false;
+
+    float last_frequency=frequencies[step];
+    bool  last_slide    =slides[step];
+    step++;
+    step=step % 16;
+
     if(volume>0){
       frequencies[step]=quantize(frequency);
-      if(digitals[0]) accents[step]=true;
-      if(digitals[1]) slides [step]=true;
+      accents[step]=digitals[0];
+      slides [step]=digitals[1];
     }
-
-
-//      volumes[step]=volume;
 
     if(digitals[4]) {
       frequencies[step]=0;
@@ -161,13 +163,17 @@ void loop()
     if(accents[step]) accent_integral+=0.3f;
     if(accent_integral>1.0f) accent_integral=1.0f;
 
-    Serial.println(accent_integral);
-
     env1.attack(cycle_length*0.5f);
     env2.sustain(accent_integral*0.5f+0.5f);
     
-    if(frequencies[step]>0) { env1.noteOn();  env2.noteOn(); }
-    else                    { env1.noteOff(); env2.noteOff();}
+    if(frequencies[step]>0 && (!last_slide || last_frequency==0) ) {
+      env1.noteOn();
+      env2.noteOn();
+    }
+    if(frequencies[step]==0) {
+      env1.noteOff(); 
+      env2.noteOff();
+    }
 
     digitalWrite(13,step%4==0);
     digitalWrite(18,accents[step]);
@@ -178,6 +184,14 @@ void loop()
 
 
   AudioNoInterrupts();
+  if(slides[step]){
+    float last_f=frequencies[step];
+    float next_f=frequencies[(step+1)%16];
+    float t=((float)cycle)/cycle_length;
+    float f=last_f*(1.f-t)+next_f*t;
+    osc1.frequency(f);
+  }
+
   filter1.octaveControl(analogs_slow[1]/1024.0f*(1.f+accent_integral)*5.0f);
   filter2.octaveControl(analogs_slow[1]/1024.0f*(1.f+accent_integral)*5.0f);
   filter1.resonance(analogs_slow[2]*5.0f/1024.0f);
@@ -199,4 +213,5 @@ void loop()
 
   }
 */
+  Serial.println(dt);
 }
