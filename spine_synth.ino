@@ -59,7 +59,7 @@ void setup(void)
 long last_time;
 bool digitals_last[5];
 bool digitals_click[5];
-float analogs_slow[]={0.,0.,0.,0.,0.,0.};
+float analogs_slow[]={0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.};
 float last_volume=0.;
 int cycle=0;
 int cycle_length=150;
@@ -89,10 +89,13 @@ void loop()
     digitals_last[i]=digitals[i];
   }
 
-  int analogs[]={analogRead(A5),analogRead(A6),analogRead(A7),c1.capacitiveSensor(128),c2.capacitiveSensor(128)};
+  int analogs[]={analogRead(A5),analogRead(A6),analogRead(A7),c1.capacitiveSensor(128),c2.capacitiveSensor(128),analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14)};
 
-  for(int i=0; i<5; i++)
+  for(int i=0; i<11; i++){
     analogs_slow[i]=analogs_slow[i]*0.8+analogs[i]*0.2;
+    Serial.print(analogs[i]); Serial.print(" ");
+  }
+  Serial.println();
   
  /*
   for(int i=0; i<5; i++)
@@ -151,7 +154,7 @@ void loop()
       slides [step]=digitals[1];
     }
 
-    if(digitals[4]) {
+    if(digitals[3]) {
       frequencies[step]=0;
       accents[step]=false;
       slides [step]=false;
@@ -192,10 +195,10 @@ void loop()
     osc1.frequency(f);
   }
 
-  filter1.octaveControl(analogs_slow[1]/1024.0f*(1.f+accent_integral)*5.0f);
-  filter2.octaveControl(analogs_slow[1]/1024.0f*(1.f+accent_integral)*5.0f);
-  filter1.resonance(analogs_slow[2]*5.0f/1024.0f);
-  filter2.resonance(analogs_slow[2]*5.0f/1024.0f);
+  filter1.octaveControl(analogs_slow[6]/1024.0f*(1.f+accent_integral)*5.0f);
+  filter2.octaveControl(analogs_slow[6]/1024.0f*(1.f+accent_integral)*5.0f);
+  filter1.resonance(analogs_slow[5]*5.0f/1024.0f);
+  filter2.resonance(analogs_slow[5]*5.0f/1024.0f);
   filter1.frequency((1024.f-analogs_slow[0])*4.0f);
   filter2.frequency((1024.f-analogs_slow[0])*4.0f);
   AudioInterrupts();
