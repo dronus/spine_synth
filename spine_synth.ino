@@ -2,28 +2,27 @@
 #include <math.h> 
 
 
-// GUItool: begin automatically generated code
 AudioSynthWaveformDc     dc1;
 AudioEffectEnvelope      env1;
 AudioEffectEnvelope      env2;
-AudioEffectMultiply      mult1;
 AudioSynthWaveform       osc1;
+AudioSynthWaveform       osc2;
+AudioMixer4              mixer1;
 AudioFilterStateVariable filter1;
 AudioFilterStateVariable filter2;
 AudioOutputAnalog        dac1;
 AudioOutputUSB           usb2;
 AudioConnection          patchCord3(dc1, 0, env1, 0);
-AudioConnection          patchCord31(dc1, 0, env2, 0);
-AudioConnection          patchCord0(osc1, 0, filter1, 0);
+AudioConnection          patchCord001(osc1, 0, mixer1, 0);
+AudioConnection          patchCord002(osc2, 0, mixer1, 1);
+AudioConnection          patchCord0(mixer1, 0, filter1, 0);
 AudioConnection          patchCord01(env1, 0, filter1, 1);
 AudioConnection          patchCord1(filter1, 0, filter2, 0);
 AudioConnection          patchCord11(env1, 0, filter2, 1);
-AudioConnection          patchCord2(filter2, 0, mult1, 0);
-AudioConnection          patchCord4(env2, 0, mult1, 1);
-AudioConnection          patchCord5(mult1, 0, dac1, 0);
-AudioConnection          patchCord6(mult1, 0, usb2, 0);
-AudioConnection          patchCord7(mult1, 0, usb2, 1);
-// GUItool: end automatically generated code
+AudioConnection          patchCord2(filter2, 0, env2, 0);
+AudioConnection          patchCord5(env2, 0, dac1, 0);
+AudioConnection          patchCord6(env2, 0, usb2, 0);
+AudioConnection          patchCord7(env2, 0, usb2, 1);
 
 #define FIVE_VOLT_TOLERANCE_WORKAROUND
 #include <CapacitiveSensor.h>
@@ -50,9 +49,10 @@ void setup(void)
   AudioMemory(30);
   dc1.amplitude(1.0);
   osc1.begin(WAVEFORM_SAWTOOTH);
-  osc1.pulseWidth(0.5);
-  osc1.frequency(440.0);
   osc1.amplitude(1.0);
+  osc2.begin(WAVEFORM_SQUARE);
+  osc2.amplitude(1.0);
+//  osc2.dutyCycle(0.5f);
   Serial.println("spine_synth running.");
 }
  
@@ -161,6 +161,7 @@ void loop()
     }
 
     osc1.frequency(frequencies[step]);
+    osc2.frequency(frequencies[step]);
 
     accent_integral*=0.7f;
     if(accents[step]) accent_integral+=0.3f;
@@ -193,8 +194,12 @@ void loop()
     float t=((float)cycle)/cycle_length;
     float f=last_f*(1.f-t)+next_f*t;
     osc1.frequency(f);
+    osc2.frequency(f);
   }
 
+  float waveform=analogs_slow[7]/1024.f;
+  mixer1.gain(0,waveform);
+  mixer1.gain(1,1.f-waveform);
   filter1.octaveControl(analogs_slow[6]/1024.0f*(1.f+accent_integral)*5.0f);
   filter2.octaveControl(analogs_slow[6]/1024.0f*(1.f+accent_integral)*5.0f);
   filter1.resonance(analogs_slow[5]*5.0f/1024.0f);
