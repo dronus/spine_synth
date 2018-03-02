@@ -111,12 +111,6 @@ void loop()
   }
   Serial.println();
 */
-  float volume=analogs_slow[3]+analogs_slow[4];
-  float frequency=(analogs_slow[3]-analogs_slow[4])/volume+1.0f;
-  frequency*=100.0f;
-
-  volume-=20000.0f;
-  if(volume<0.f) volume=0.f;
 
   long time=millis();
   long dt=time-last_time;
@@ -137,6 +131,13 @@ void loop()
   cycle+=dt;
 
   if(cycle>cycle_length){
+
+    float volume=analogs_slow[3]+analogs_slow[4];
+    float frequency=(analogs_slow[3]-analogs_slow[4])/volume+1.0f;
+    frequency*=100.0f;
+
+    volume-=20000.0f;
+    if(volume<0.f) volume=0.f;
 
     if(digitals_click[0]) accents[step]=!accents[step];
     digitals_click[0]=false;
@@ -160,16 +161,15 @@ void loop()
       slides [step]=false;
     }
 
-    osc1.frequency(frequencies[step]);
-    osc2.frequency(frequencies[step]);
-
     accent_integral*=0.7f;
-    if(accents[step]) accent_integral+=0.3f;
+    if(accents[step]) accent_integral+=analogs_slow[8]/1024.f;
     if(accent_integral>1.0f) accent_integral=1.0f;
 
-    env1.attack(cycle_length*0.5f);
+    float decay=accents[step] ? cycle_length * 0.5f : analogs_slow[7]/1024.f*4.f*cycle_length;
+
+    AudioNoInterrupts();
+    env1.decay(decay);
     env2.sustain(accent_integral*0.5f+0.5f);
-    
     if(frequencies[step]>0 && (!last_slide || last_frequency==0) ) {
       env1.noteOn();
       env2.noteOn();
@@ -178,6 +178,7 @@ void loop()
       env1.noteOff(); 
       env2.noteOff();
     }
+    AudioInterrupts();
 
     digitalWrite(13,step%4==0);
     digitalWrite(18,accents[step]);
@@ -186,26 +187,28 @@ void loop()
     cycle-=cycle_length;
   }
 
-
-  AudioNoInterrupts();
+  float frequency=frequencies[step];
   if(slides[step]){
-    float last_f=frequencies[step];
     float next_f=frequencies[(step+1)%16];
     float t=((float)cycle)/cycle_length;
-    float f=last_f*(1.f-t)+next_f*t;
-    osc1.frequency(f);
-    osc2.frequency(f);
+    frequency=frequency*(1.f-t)+next_f*t;
   }
+  float mix_waveform     =analogs_slow[10]/1024.f;
+  float filter_mod       =(analogs_slow[6]/1024.0f+accents[step] ? accent_integral : 0.f)*7.0f;
+  float filter_resonance =analogs_slow[5]*5.0f/1024.0f;
+  float filter_cutoff    =(1024.f-analogs_slow[0])*4.0f;
 
-  float waveform=analogs_slow[7]/1024.f;
-  mixer1.gain(0,waveform);
-  mixer1.gain(1,1.f-waveform);
-  filter1.octaveControl(analogs_slow[6]/1024.0f*(1.f+accent_integral)*5.0f);
-  filter2.octaveControl(analogs_slow[6]/1024.0f*(1.f+accent_integral)*5.0f);
-  filter1.resonance(analogs_slow[5]*5.0f/1024.0f);
-  filter2.resonance(analogs_slow[5]*5.0f/1024.0f);
-  filter1.frequency((1024.f-analogs_slow[0])*4.0f);
-  filter2.frequency((1024.f-analogs_slow[0])*4.0f);
+  AudioNoInterrupts();
+  osc1.frequency(frequency);
+  osc2.frequency(frequency);
+  mixer1.gain(0,    mix_waveform);
+  mixer1.gain(1,1.f-mix_waveform);
+  filter1.octaveControl(filter_mod);
+  filter1.resonance(filter_resonance);
+  filter1.frequency(filter_cutoff);
+  filter2.octaveControl(filter_mod);
+  filter2.resonance(filter_resonance);
+  filter2.frequency(filter_cutoff);
   AudioInterrupts();
   /*
   if(millis() - last_time >= 5000) {
