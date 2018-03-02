@@ -61,7 +61,8 @@ bool digitals_last[5];
 bool digitals_click[5];
 float last_volume=0.;
 int cycle=0;
-int cycle_length=150;
+int base_cycle_length=150;
+int cycle_length=base_cycle_length;
 int step =0;
 float frequencies[16];
 bool accents[16];
@@ -98,8 +99,8 @@ void loop()
   if(digitals_click[2])
   {
     digitals_click[2]=false;
-    long four_bars=time-taps[3];
-    cycle_length=four_bars/16;
+    long four_bars=time-taps[2];
+    cycle_length=base_cycle_length=four_bars/12;
 
     for(int i=2; i>=0; i--)
       taps[i+1]=taps[i];
@@ -165,6 +166,11 @@ void loop()
     digitalWrite(16,slides [step]);
 
     cycle-=cycle_length;
+
+    if(step%2==0)  // swing
+      cycle_length=base_cycle_length*(1.f-analogs[8]/1024.f*0.5f);
+    else
+      cycle_length=base_cycle_length*(1.f+analogs[8]/1024.f*0.5f);
   }
 
   float frequency=frequencies[step];
