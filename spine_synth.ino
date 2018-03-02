@@ -46,12 +46,12 @@ void setup(void)
 
   Serial.begin(9600);
 
-  AudioMemory(30);
-  dc1.amplitude(1.0);
+  AudioMemory(64);
+  dc1.amplitude(1.0f);
   osc1.begin(WAVEFORM_SAWTOOTH);
-  osc1.amplitude(1.0);
+  osc1.amplitude(1.0f);
   osc2.begin(WAVEFORM_SQUARE);
-  osc2.amplitude(1.0);
+  osc2.amplitude(1.0f);
 //  osc2.dutyCycle(0.5f);
   Serial.println("spine_synth running.");
 }
@@ -71,9 +71,9 @@ long last_tap=0;
 
 long taps[4];
 
-float quantize(float f)
+float note_to_frequency(float f)
 {
-  return exp2(floor(log2(f)*12.0f)/12.0f);
+  return 110.f*exp2(floor(f)/12.0f);
 }
 
 float accent_integral=0.f;
@@ -112,7 +112,9 @@ void loop()
 
     float volume=analogs[0]+analogs[1];
     float frequency=(analogs[0]-analogs[1])/volume+1.0f;
-    frequency*=100.0f;
+    frequency*=20.0f;
+    frequency-=20.f;
+    frequency=note_to_frequency(frequency);
 
     volume-=20000.0f;
     if(volume<0.f) volume=0.f;
@@ -128,7 +130,7 @@ void loop()
     step=step % 16;
 
     if(volume>0){
-      frequencies[step]=quantize(frequency);
+      frequencies[step]=frequency;
       accents[step]=digitals[0];
       slides [step]=digitals[1];
     }
