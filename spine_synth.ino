@@ -59,7 +59,6 @@ void setup(void)
 long last_time;
 bool digitals_last[5];
 bool digitals_click[5];
-float analogs_slow[]={0.,0.,0.,0.,0.,0.,0.,0.,0.,0.,0.};
 float last_volume=0.;
 int cycle=0;
 int cycle_length=150;
@@ -91,9 +90,6 @@ void loop()
 
   int analogs[]={analogRead(A5),analogRead(A6),analogRead(A7),c1.capacitiveSensor(128),c2.capacitiveSensor(128),analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14)};
 
-  for(int i=0; i<11; i++)
-    analogs_slow[i]=analogs_slow[i]*0.8+analogs[i]*0.2;
- 
  /*
   for(int i=0; i<5; i++)
   {
@@ -129,8 +125,8 @@ void loop()
 
   if(cycle>cycle_length){
 
-    float volume=analogs_slow[3]+analogs_slow[4];
-    float frequency=(analogs_slow[3]-analogs_slow[4])/volume+1.0f;
+    float volume=analogs[3]+analogs[4];
+    float frequency=(analogs[3]-analogs[4])/volume+1.0f;
     frequency*=100.0f;
 
     volume-=20000.0f;
@@ -159,10 +155,10 @@ void loop()
     }
 
     accent_integral*=0.7f;
-    if(accents[step]) accent_integral+=analogs_slow[9]/1024.f;
+    if(accents[step]) accent_integral+=analogs[9]/1024.f;
     if(accent_integral>1.0f) accent_integral=1.0f;
 
-    float decay=accents[step] ? cycle_length * 0.5f : analogs_slow[8]/1024.f*4.f*cycle_length;
+    float decay=accents[step] ? cycle_length * 0.5f : analogs[8]/1024.f*4.f*cycle_length;
 
     AudioNoInterrupts();
     env1.decay(decay);
@@ -190,10 +186,10 @@ void loop()
     float t=((float)cycle)/cycle_length;
     frequency=frequency*(1.f-t)+next_f*t;
   }
-  float mix_waveform     =analogs_slow[10]/1024.f;
-  float filter_cutoff    =analogs_slow[5]*4.0f;
-  float filter_resonance =analogs_slow[6]*5.0f/1024.0f;
-  float filter_mod       =(analogs_slow[7]/1024.0f + (accents[step] ? accent_integral : 0.f) )*7.0f;
+  float mix_waveform     =analogs[10]/1024.f;
+  float filter_cutoff    =analogs[5]*4.0f;
+  float filter_resonance =analogs[6]*5.0f/1024.0f;
+  float filter_mod       =(analogs[7]/1024.0f + (accents[step] ? accent_integral : 0.f) )*7.0f;
 
   AudioNoInterrupts();
   osc1.frequency(frequency);
