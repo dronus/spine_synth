@@ -93,7 +93,7 @@ void loop()
 
   for(int i=0; i<11; i++)
     analogs_slow[i]=analogs_slow[i]*0.8+analogs[i]*0.2;
-
+ 
  /*
   for(int i=0; i<5; i++)
   {
@@ -159,10 +159,10 @@ void loop()
     }
 
     accent_integral*=0.7f;
-    if(accents[step]) accent_integral+=analogs_slow[8]/1024.f;
+    if(accents[step]) accent_integral+=analogs_slow[9]/1024.f;
     if(accent_integral>1.0f) accent_integral=1.0f;
 
-    float decay=accents[step] ? cycle_length * 0.5f : analogs_slow[7]/1024.f*4.f*cycle_length;
+    float decay=accents[step] ? cycle_length * 0.5f : analogs_slow[8]/1024.f*4.f*cycle_length;
 
     AudioNoInterrupts();
     env1.decay(decay);
@@ -191,9 +191,9 @@ void loop()
     frequency=frequency*(1.f-t)+next_f*t;
   }
   float mix_waveform     =analogs_slow[10]/1024.f;
-  float filter_mod       =(analogs_slow[6]/1024.0f + (accents[step] ? accent_integral : 0.f) )*7.0f;
-  float filter_resonance =analogs_slow[5]*5.0f/1024.0f;
-  float filter_cutoff    =(1024.f-analogs_slow[0])*4.0f;
+  float filter_cutoff    =analogs_slow[5]*4.0f;
+  float filter_resonance =analogs_slow[6]*5.0f/1024.0f;
+  float filter_mod       =(analogs_slow[7]/1024.0f + (accents[step] ? accent_integral : 0.f) )*7.0f;
 
   AudioNoInterrupts();
   osc1.frequency(frequency);
