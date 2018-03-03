@@ -1,6 +1,7 @@
 #include <Audio.h>
 #include <math.h> 
-
+#include <MIDI.h>
+#include <midi_UsbTransport.h>
 
 // Spine Synth
 //
@@ -44,6 +45,12 @@ AudioConnection          patchCord2(filter2, 0, env2, 0);
 AudioConnection          patchCord5(env2, 0, dac1, 0);
 AudioConnection          patchCord6(env2, 0, usb2, 0);
 AudioConnection          patchCord7(env2, 0, usb2, 1);
+
+static const unsigned sUsbTransportBufferSize = 16;
+typedef midi::UsbTransport<sUsbTransportBufferSize> UsbTransport;
+UsbTransport sUsbTransport;
+MIDI_CREATE_INSTANCE(UsbTransport, sUsbTransport, MIDI);
+
 
 float getDifferentialCapacity(int sendPin, int receivePin1, int receivePin2, int samples, float& total);
 
@@ -152,7 +159,11 @@ void loop()
 
   cycle+=dt;
 
-  if(cycle>cycle_length){
+  int midiEvent=usbMIDI.read() ? usbMIDI.getType() : 0;
+  if(midiEvent){
+    Serial.print("MIDI ");Serial.print(midiEvent); Serial.println();
+  }
+  if((cycle_length>0 && cycle>cycle_length) || midiEvent==usbMIDI.NoteOn || midiEvent==usbMIDI.NoteOff){
 
     int scale=analogs[9]*12/1024;
 
@@ -173,8 +184,28 @@ void loop()
 
     float last_frequency=frequencies[step];
     bool  last_slide    =slides[step];
-    step++;
-    step=step % 16;
+
+   if(midiEvent==usbMIDI.NoteOn){
+      int candidate=note_to_frequency(usbMIDI.getData1()-21,0.);
+      if(candidate>last_frequency){
+        step++;
+        step=step % 16;
+        frequencies[step]=note_to_frequency(usbMIDI.getData1()-21,0.);
+        accents[step]=(usbMIDI.getData2()>=100);
+        slides [step]=false;
+      }
+    }else if(midiEvent==usbMIDI.NoteOff){
+      if(last_frequency==note_to_frequency(usbMIDI.getData1()-21,0.)){
+        step++;
+        step=step % 16;
+        frequencies[step]=0;
+        accents[step]=false;
+        slides [step]=false;
+      }
+    }else{
+      step++;
+      step=step % 16;    
+    }
 
     if(volume>0){
       frequencies[step]=frequency;
@@ -193,7 +224,7 @@ void loop()
     if(accent_integral>1.0f) accent_integral=1.0f;
 
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
-    float decay=accents[step] ? cycle_length * 1.6f : log_pot(analogs[5])*4.f*cycle_length;
+    float decay=accents[step] ? base_cycle_length * 1.6f : log_pot(analogs[5])*4.f*base_cycle_length;
 
     AudioNoInterrupts();
     env1.decay(decay);
@@ -214,7 +245,9 @@ void loop()
 
     cycle-=cycle_length;
 
-    if(step%2==0)  // swing
+    if(midiEvent)
+      cycle_length=0;
+    else if(step%2==0)  // swing
       cycle_length=base_cycle_length*(1.f-analogs[8]/1024.f*0.5f);
     else
       cycle_length=base_cycle_length*(1.f+analogs[8]/1024.f*0.5f);
@@ -223,7 +256,7 @@ void loop()
   float frequency=frequencies[step];
   if(slides[step]){
     float next_f=frequencies[(step+1)%16];
-    float t=((float)cycle)/cycle_length;
+    float t=((float)cycle)/base_cycle_length;
     frequency=frequency*(1.f-t)+next_f*t;
   }
   float mix_waveform     =analogs[7]/1024.f;
