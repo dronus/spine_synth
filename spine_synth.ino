@@ -2,6 +2,27 @@
 #include <math.h> 
 
 
+// Spine Synth
+//
+// A somewhat TB-303 like subtractive synthesizer.
+//
+// Several parameters are choosen to behave more or less then a TB-303.
+//
+// Some parameters are choosen to perform easier than a TB-303, eg. some envelope timings tied to sequencer speed.
+// The sequencer does not follow the complicated step programming scheme, but only allows to enter notes
+// in realtime into the running sequence.
+//
+// Some of the TB-303 unique behaviours are implemented in an easy and simple manner. 
+//
+// We do not try to match the sound of the original device, but provide the basic qualities 
+// of it's basic sound and unique features the most simple emulations lack.
+//
+// See the TB-303 service manual and
+// http://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
+// as reference sources of basic operation and parameters.
+
+
+
 AudioSynthWaveformDc     dc1;
 AudioEffectEnvelope      env1;
 AudioEffectEnvelope      env2;
@@ -52,7 +73,9 @@ void setup(void)
   osc1.amplitude(1.0f);
   osc2.begin(WAVEFORM_SQUARE);
   osc2.amplitude(1.0f);
-//  osc2.dutyCycle(0.5f);
+  env1.attack(3.0f); // attack as by TB-303
+  env2.attack(3.0f);
+  env2.decay(16.0f); // TB-303 has 8ms full on and 8ms linear decay
   Serial.println("spine_synth running.");
 }
  
@@ -61,7 +84,7 @@ bool digitals_last[5];
 bool digitals_click[5];
 float last_volume=0.;
 int cycle=0;
-int base_cycle_length=150;
+int base_cycle_length=125;
 int cycle_length=base_cycle_length;
 int step =0;
 float frequencies[16];
@@ -79,6 +102,7 @@ float note_to_frequency(float f)
 
 float accent_integral=0.f;
 
+
 void loop()
 {
 
@@ -90,6 +114,10 @@ void loop()
   }
 
   int analogs[]={c1.capacitiveSensor(128),c2.capacitiveSensor(128),analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
+
+/*  Serial.print(analogs[0]);
+  Serial.print(" ");
+  Serial.println(analogs[1]);*/
 
   long time=millis();
   long dt=time-last_time;
@@ -117,7 +145,7 @@ void loop()
     frequency-=20.f;
     frequency=note_to_frequency(frequency);
 
-    volume-=20000.0f;
+    volume-=30000.0f;
     if(volume<0.f) volume=0.f;
 
     if(digitals_click[0]) accents[step]=!accents[step];
@@ -146,7 +174,8 @@ void loop()
     if(accents[step]) accent_integral+=analogs[6]/1024.f;
     if(accent_integral>1.0f) accent_integral=1.0f;
 
-    float decay=accents[step] ? cycle_length * 0.5f : analogs[5]/1024.f*4.f*cycle_length;
+    // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
+    float decay=accents[step] ? cycle_length * 1.6f : analogs[5]/1024.f*4.f*cycle_length;
 
     AudioNoInterrupts();
     env1.decay(decay);
