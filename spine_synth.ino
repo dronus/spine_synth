@@ -45,12 +45,7 @@ AudioConnection          patchCord5(env2, 0, dac1, 0);
 AudioConnection          patchCord6(env2, 0, usb2, 0);
 AudioConnection          patchCord7(env2, 0, usb2, 1);
 
-#define FIVE_VOLT_TOLERANCE_WORKAROUND
-#include <CapacitiveSensor.h>
-
-CapacitiveSensor c1(8, 9);
-CapacitiveSensor c2(8,10);
-
+float getDifferentialCapacity(int sendPin, int receivePin1, int receivePin2, int samples, float& total);
 
 
 void setup(void)
@@ -107,7 +102,7 @@ float note_to_frequency(int note,int scale)
     note=scale_notes[key]+octave*12;
     note-=scale;
   }
-  return 110.f*exp2(note/12.0f);
+  return 27.5f*exp2(note/12.0f);
 }
 
 float accent_integral=0.f;
@@ -115,6 +110,15 @@ float accent_integral=0.f;
 
 void loop()
 {
+  long time;
+  long dt=0;
+  while(dt<10)
+  {
+    time=millis();
+    dt=time-last_time;
+    delay(1);
+  }
+  last_time = time;
 
   bool digitals[]={!digitalRead(17),!digitalRead(15),!digitalRead(14),digitalRead(22)};
   for(int i=0;i<4; i++)
@@ -123,15 +127,12 @@ void loop()
     digitals_last[i]=digitals[i];
   }
 
-  int analogs[]={c1.capacitiveSensor(128),c2.capacitiveSensor(128),analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
+  int analogs[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
 
 /*  Serial.print(analogs[0]);
   Serial.print(" ");
   Serial.println(analogs[1]);*/
 
-  long time=millis();
-  long dt=time-last_time;
-  last_time = time;
 
   // tap tempo
   if(digitals_click[2])
@@ -151,14 +152,15 @@ void loop()
 
     int scale=analogs[9]*12/1024;
 
-    float volume=analogs[0]+analogs[1];
-    float frequency=(analogs[0]-analogs[1])/volume+1.0f;
-    frequency*=20.0f;
-    frequency-=20.f;
+    float total=0;
+    float diff=getDifferentialCapacity(8, 9, 10, 512, total);
+
+    float volume=total;
+    float frequency=-diff/volume+0.25f;
+    frequency*=40.0f;
     frequency=note_to_frequency(frequency,scale);
 
-    volume-=30000.0f;
-    if(volume<0.f) volume=0.f;
+    if(volume<75.f) volume=0.f;
 
     if(digitals_click[0]) accents[step]=!accents[step];
     digitals_click[0]=false;
@@ -251,5 +253,4 @@ void loop()
     Serial.println(dt);
   }
 */
-
 }
