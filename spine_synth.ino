@@ -95,9 +95,19 @@ long last_tap=0;
 
 long taps[4];
 
-float note_to_frequency(float f)
+
+int scale_notes[]={0,2,4,5,7,9,11};
+
+float note_to_frequency(int note,int scale)
 {
-  return 110.f*exp2(floor(f)/12.0f);
+  if(scale!=0){
+    note+=scale;
+    int octave=note/8;
+    int key   =note%8;
+    note=scale_notes[key]+octave*12;
+    note-=scale;
+  }
+  return 110.f*exp2(note/12.0f);
 }
 
 float accent_integral=0.f;
@@ -139,11 +149,13 @@ void loop()
 
   if(cycle>cycle_length){
 
+    int scale=analogs[9]*12/1024;
+
     float volume=analogs[0]+analogs[1];
     float frequency=(analogs[0]-analogs[1])/volume+1.0f;
     frequency*=20.0f;
     frequency-=20.f;
-    frequency=note_to_frequency(frequency);
+    frequency=note_to_frequency(frequency,scale);
 
     volume-=30000.0f;
     if(volume<0.f) volume=0.f;
