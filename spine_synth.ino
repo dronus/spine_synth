@@ -90,6 +90,10 @@ long last_tap=0;
 
 long taps[4];
 
+float log_pot(int x)
+{
+  return 1.f-log2(1024-x)/10.f;
+}
 
 int scale_notes[]={0,2,4,5,7,9,11};
 
@@ -185,11 +189,11 @@ void loop()
     }
 
     accent_integral*=0.7f;
-    if(accents[step]) accent_integral+=analogs[6]/1024.f;
+    if(accents[step]) accent_integral+=log_pot(analogs[6]);
     if(accent_integral>1.0f) accent_integral=1.0f;
 
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
-    float decay=accents[step] ? cycle_length * 1.6f : analogs[5]/1024.f*4.f*cycle_length;
+    float decay=accents[step] ? cycle_length * 1.6f : log_pot(analogs[5])*4.f*cycle_length;
 
     AudioNoInterrupts();
     env1.decay(decay);
@@ -223,9 +227,9 @@ void loop()
     frequency=frequency*(1.f-t)+next_f*t;
   }
   float mix_waveform     =analogs[7]/1024.f;
-  float filter_cutoff    =analogs[2]*4.0f;
+  float filter_cutoff    =log_pot(analogs[2])*4096.0f;
   float filter_resonance =analogs[3]*5.0f/1024.0f;
-  float filter_mod       =(analogs[4]/1024.0f + (accents[step] ? accent_integral : 0.f) )*7.0f;
+  float filter_mod       =(log_pot(analogs[4]) + (accents[step] ? accent_integral : 0.f) )*7.0f;
 
   AudioNoInterrupts();
   osc1.frequency(frequency);
