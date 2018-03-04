@@ -26,12 +26,13 @@
 
 AudioSynthWaveformDc     dc1;
 AudioEffectEnvelope      env1;
-AudioEffectEnvelope      env2;
 AudioSynthWaveform       osc1;
 AudioSynthWaveform       osc2;
 AudioMixer4              mixer1;
 AudioFilterStateVariable filter1;
 AudioFilterStateVariable filter2;
+AudioEffectEnvelope      env2;
+AudioFilterStateVariable filter3;
 AudioOutputAnalog        dac1;
 AudioOutputUSB           usb2;
 AudioConnection          patchCord3(dc1, 0, env1, 0);
@@ -42,9 +43,10 @@ AudioConnection          patchCord01(env1, 0, filter1, 1);
 AudioConnection          patchCord1(filter1, 0, filter2, 0);
 AudioConnection          patchCord11(env1, 0, filter2, 1);
 AudioConnection          patchCord2(filter2, 0, env2, 0);
-AudioConnection          patchCord5(env2, 0, dac1, 0);
-AudioConnection          patchCord6(env2, 0, usb2, 0);
-AudioConnection          patchCord7(env2, 0, usb2, 1);
+AudioConnection          patchCord21(env2, 0, filter3, 0);
+AudioConnection          patchCord5(filter3, 0, dac1, 0);
+AudioConnection          patchCord6(filter3, 0, usb2, 0);
+AudioConnection          patchCord7(filter3, 0, usb2, 1);
 
 static const unsigned sUsbTransportBufferSize = 16;
 typedef midi::UsbTransport<sUsbTransportBufferSize> UsbTransport;
@@ -77,7 +79,9 @@ void setup(void)
   osc2.amplitude(1.0f);
   env1.attack(3.0f); // attack as by TB-303
   env2.attack(3.0f);
-  env2.decay(16.0f); // TB-303 has 8ms full on and 8ms linear decay
+  // env2.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
+  env2.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)
+  filter3.frequency(5000.);
   Serial.println("spine_synth running.");
 }
  
@@ -227,8 +231,9 @@ void loop()
     float decay=accents[step] ? base_cycle_length * 1.6f : log_pot(analogs[5])*4.f*base_cycle_length;
 
     AudioNoInterrupts();
+    env1.attack(accents[step] ? base_cycle_length*analogs[3]/1024.f : 10.f);  // accent slew tied to 'resonance' pot like TB-303 does.
     env1.decay(decay);
-    env2.sustain(accent_integral*0.5f+0.5f);
+    env2.sustain(accent_integral*0.5f+0.5f); // TODO TB-303 would add the slewed, slow env1 to VCA for accent notes. Here we just raise sustain for now.
     if(frequencies[step]>0 && (!last_slide || last_frequency==0) ) {
       env1.noteOn();
       env2.noteOn();
