@@ -21,10 +21,20 @@ public:
     __enable_irq();
   }
 	void attack(float milliseconds) {
-		attack_valve = pow(0.1,1.f/(AUDIO_SAMPLE_RATE_EXACT*0.001f*milliseconds));
+  	__disable_irq();
+    if(milliseconds<=0.f) 
+      attack_valve=0.f;
+    else    
+  		attack_valve = pow(0.1,1.f/(AUDIO_SAMPLE_RATE_EXACT*0.001f*milliseconds));
+    __enable_irq();
 	}
 	void decay(float milliseconds) {
-		decay_valve = pow(0.1,1.f/(AUDIO_SAMPLE_RATE_EXACT*0.001f*milliseconds));
+  	__disable_irq();
+    if(milliseconds<=0.f)
+      decay_valve=0.f;
+    else
+  		decay_valve = pow(0.1,1.f/(AUDIO_SAMPLE_RATE_EXACT*0.001f*milliseconds));
+    __enable_irq();
 	}
 	virtual void update(void)	{
 	  int16_t *p, *end;
@@ -35,11 +45,13 @@ public:
 	  p = (int16_t*)(block->data);
 	  end = p + AUDIO_BLOCK_SAMPLES;
 
+/*
     Serial.print(attack_valve); Serial.print(" ");
     Serial.print(decay_valve); Serial.print(" ");
     Serial.print(attack_valve); Serial.print(" ");
     Serial.print(energy_in); Serial.print(" ");
     Serial.println(energy);Serial.println();
+*/
 
     double attack_flow=1.-attack_valve;
 	  while (p < end) {

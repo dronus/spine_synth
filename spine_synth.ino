@@ -26,25 +26,36 @@
 
 
 AudioSynthWaveformDc     dc1;
-AudioEffectIntegrator    env1;
+AudioEffectIntegrator    vcfEnv;
+AudioEffectIntegrator    accEnv;
+AudioMixer4              cvMixer;
 AudioSynthWaveform       osc1;
 AudioSynthWaveform       osc2;
 AudioMixer4              mixer1;
 AudioFilterStateVariable filter1;
 AudioFilterStateVariable filter2;
-AudioEffectIntegrator    env2;
+AudioEffectIntegrator    vcaEnv;
+AudioMixer4              vcaMixer;
+AudioEffectMultiply      vca;
 AudioFilterStateVariable filter3;
 AudioOutputAnalog        dac1;
 AudioOutputUSB           usb2;
-AudioConnection          patchCord3(dc1, 0, env1, 0);
+AudioConnection          patchCord3(dc1, 0, vcfEnv, 0);
 AudioConnection          patchCord001(osc1, 0, mixer1, 0);
 AudioConnection          patchCord002(osc2, 0, mixer1, 1);
 AudioConnection          patchCord0(mixer1, 0, filter1, 0);
-AudioConnection          patchCord01(env1, 0, filter1, 1);
+AudioConnection          patchCord01(vcfEnv, 0, cvMixer, 0);
+AudioConnection          patchCord31(dc1, 0, accEnv, 0);
+AudioConnection          patchCord02(accEnv, 0, cvMixer, 1);
+AudioConnection          patchCord03(cvMixer, 0, filter1, 1);
 AudioConnection          patchCord1(filter1, 0, filter2, 0);
-AudioConnection          patchCord11(env1, 0, filter2, 1);
-AudioConnection          patchCord2(filter2, 0, env2, 0);
-AudioConnection          patchCord21(env2, 0, filter3, 0);
+AudioConnection          patchCord11(cvMixer, 0, filter2, 1);
+AudioConnection          patchCord2(filter2, 0, vca, 0);
+AudioConnection          patchCord32(dc1, 0, vcaEnv, 0);
+AudioConnection          patchCord21(vcaEnv, 0, vcaMixer, 0);
+AudioConnection          patchCord22(accEnv, 0, vcaMixer, 1);
+AudioConnection          patchCord23(vcaMixer, 0, vca, 1);
+AudioConnection          patchCord24(vca, 0, filter3, 0); //vca
 AudioConnection          patchCord5(filter3, 0, dac1, 0);
 AudioConnection          patchCord6(filter3, 0, usb2, 0);
 AudioConnection          patchCord7(filter3, 0, usb2, 1);
@@ -78,9 +89,13 @@ void setup(void)
   osc1.amplitude(1.0f);
   osc2.begin(WAVEFORM_SQUARE);
   osc2.amplitude(1.0f);
-  env1.attack(3.0f); // attack as by TB-303
-  env2.attack(3.0f);
-  // env2.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
+  vcfEnv.attack(3.0f); // attack as by TB-303
+  vcaEnv.attack(3.0f);
+  cvMixer.gain(0,1.f);
+  cvMixer.gain(1,1.f);
+  vcaMixer.gain(0,1.f);
+  vcaMixer.gain(1,1.f);
+  // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
   filter3.frequency(5000.);
   Serial.println("spine_synth running.");
 }
@@ -119,9 +134,6 @@ float note_to_frequency(int note,int scale)
   }
   return 27.5f*exp2(note/12.0f);
 }
-
-float accent_integral=0.f;
-
 
 void loop()
 {
@@ -223,27 +235,25 @@ void loop()
       slides [step]=false;
     }
 
-    accent_integral*=0.7f;
-    if(accents[step]) accent_integral+=log_pot(analogs[6]);
-    if(accent_integral>1.0f) accent_integral=1.0f;
-
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
     float decay=accents[step] ? base_cycle_length * 1.6f : log_pot(analogs[5])*32.f*base_cycle_length;
 
-    AudioNoInterrupts();
-    env1.attack(accents[step] ? base_cycle_length*analogs[3]/1024.f : 3.f);  // accent slew tied to 'resonance' pot like TB-303 does.
-    env1.decay(decay);
+    float accent=log_pot(analogs[6]);
 
-    //env2.sustain(accent_integral*0.5f+0.5f); // TODO TB-303 would add the slewed, slow env1 to VCA for accent notes. Here we just raise sustain for now.
-    env2.decay(300.f); // "TB-303 VEG has 3s decay" (Devilfish docs)
+    AudioNoInterrupts();
+    vcfEnv.attack(accents[step] ? base_cycle_length*analogs[3]/1024.f : 3.f);  // accent slew tied to 'resonance' pot like TB-303 does.
+    vcfEnv.decay(decay);
+
+    vcaEnv.decay(300.f); // "TB-303 VEG has 3s decay" (Devilfish docs)
 
     if(frequencies[step]>0 && (!last_slide || last_frequency==0) ) {
-      env1.noteOn(accent_integral*0.5f+0.5f);
-      env2.noteOn(accent_integral*0.5f+0.5f);
+      if(accents[step]) accEnv.pulse(accent);
+      vcfEnv.noteOn(1.f);
+      vcaEnv.noteOn(1.f);
     }
 /*    if(frequencies[step]==0) {
-      env1.noteOff(); 
-      env2.noteOff();
+      vcfEnv.noteOff(); 
+      vcaEnv.noteOff();
     }*/
     AudioInterrupts();
 
@@ -270,7 +280,7 @@ void loop()
   float mix_waveform     =analogs[7]/1024.f;
   float filter_cutoff    =log_pot(analogs[2])*4096.0f;
   float filter_resonance =analogs[3]*5.0f/1024.0f;
-  float filter_mod       =(log_pot(analogs[4]) + (accents[step] ? accent_integral : 0.f) )*7.0f;
+  float filter_mod       =log_pot(analogs[4])*7.0f;
 
   AudioNoInterrupts();
   if(frequency) osc1.frequency(frequency);
@@ -284,8 +294,7 @@ void loop()
   filter2.resonance(filter_resonance);
   filter2.frequency(filter_cutoff);
   AudioInterrupts();
-  /*
-  if(millis() - last_time >= 5000) {
+  
     Serial.print("Proc = ");
     Serial.print(AudioProcessorUsage());
     Serial.print(" (");    
@@ -296,6 +305,5 @@ void loop()
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
     Serial.println(dt);
-  }
-*/
+
 }
