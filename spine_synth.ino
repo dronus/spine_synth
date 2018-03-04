@@ -270,8 +270,8 @@ void loop()
   float filter_mod       =(log_pot(analogs[4]) + (accents[step] ? accent_integral : 0.f) )*7.0f;
 
   AudioNoInterrupts();
-  osc1.frequency(frequency);
-  osc2.frequency(frequency);
+  if(frequency) osc1.frequency(frequency);
+  if(frequency) osc2.frequency(frequency);
   mixer1.gain(0,    mix_waveform);
   mixer1.gain(1,1.f-mix_waveform);
   filter1.octaveControl(filter_mod);
