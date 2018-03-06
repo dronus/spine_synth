@@ -29,19 +29,16 @@ AudioEffectIntegrator    vcfEnv;
 AudioEffectIntegrator    accEnv;
 AudioMixer4              vcfMixer;
 AudioSynthWaveform       oscSaw;
-AudioSynthWaveform       oscSquare;
-AudioMixer4              oscMixer;
 AudioFilterStateVariable vcf1;
 AudioFilterStateVariable vcf2;
 AudioEffectIntegrator    vcaEnv;
 AudioMixer4              vcaMixer;
 AudioEffectMultiply      vca;
+AudioEffectWaveshaper    distort;
 AudioOutputAnalog        dac;
 AudioOutputUSB           usbOut;
 AudioConnection          patchCord0 (dc       , 0, vcfEnv  , 0);
-AudioConnection          patchCord1 (oscSaw   , 0, oscMixer, 0);
-AudioConnection          patchCord2 (oscSquare, 0, oscMixer, 1);
-AudioConnection          patchCord3 (oscMixer , 0, vcf1    , 0);
+AudioConnection          patchCord3 (oscSaw   , 0, vcf1    , 0);
 AudioConnection          patchCord4 (vcfEnv   , 0, vcfMixer, 0);
 AudioConnection          patchCord5 (dc       , 0, accEnv  , 0);
 AudioConnection          patchCord6 (accEnv   , 0, vcfMixer, 1);
@@ -53,9 +50,10 @@ AudioConnection          patchCord11(dc       , 0, vcaEnv  , 0);
 AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
 AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
 AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
-AudioConnection          patchCord15(vca      , 0, dac     , 0);
-AudioConnection          patchCord16(vca      , 0, usbOut  , 0);
-AudioConnection          patchCord17(vca      , 0, usbOut  , 1);
+AudioConnection          patchCord18(vca      , 0, distort , 0);
+AudioConnection          patchCord15(distort  , 0, dac     , 0);
+AudioConnection          patchCord16(distort  , 0, usbOut  , 0);
+AudioConnection          patchCord17(distort  , 0, usbOut  , 1);
 
 Capacity capacities[16];
 
@@ -78,8 +76,6 @@ void setup(void)
   dc.amplitude(1.0f);
   oscSaw.begin(WAVEFORM_SAWTOOTH);
   oscSaw.amplitude(1.0f);
-  oscSquare.begin(WAVEFORM_SQUARE);
-  oscSquare.amplitude(1.0f);
   vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
   vcaEnv.attack(3.0f);
   // vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
@@ -251,6 +247,7 @@ void loop()
       vcfEnv.noteOn(1.f);
       vcaEnv.noteOn(1.f);
     }
+
     AudioInterrupts();
 
     digitalWrite(13,step%4==0);
@@ -273,16 +270,22 @@ void loop()
     float t=((float)cycle)/base_cycle_length;
     frequency=frequency*(1.f-t)+next_f*t;
   }
-  float mix_waveform     =analogs[7]/1024.f;
   float filter_cutoff    =log_pot(analogs[2])*4096.0f;
   float filter_resonance =analogs[3]*5.0f/1024.0f;
   float filter_mod       =analogs[4]/1024.f;
+  float distortion_map[33];
+  float distortion       =0.25f+(1.f-analogs[7]/1024.f)*0.75f;
+  for(int i=0; i<16; i++){
+    float x=1.f-i/16.f;
+    float y=powf(abs(x),distortion);
+    distortion_map[i   ]=-y;
+    distortion_map[32-i]= y;
+  }
+  distortion_map[16]=0.f;
 
   AudioNoInterrupts();
+  distort.shape(distortion_map,33);
   if(frequency) oscSaw.frequency(frequency);
-  if(frequency) oscSquare.frequency(frequency);
-  oscMixer.gain(0,    mix_waveform);
-  oscMixer.gain(1,1.f-mix_waveform);
   vcfMixer.gain(0,filter_mod);
   vcfMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
   vcf1.octaveControl(7.f);
@@ -302,6 +305,6 @@ void loop()
     Serial.print(" (");    
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
-    Serial.println(dt);
-*/
+*/    Serial.println(dt);
+
 }
