@@ -12,22 +12,20 @@ public:
     rBit = PIN_TO_BITMASK(receivePin);
     rReg = PIN_TO_BASEREG(receivePin);
     pinMode(sendPin,OUTPUT);
+    digitalWrite(sendPin,LOW);
     pinMode(receivePin,INPUT);
+    digitalWrite(receivePin,LOW);
   }
   void update(int samples)
   {
-	  DIRECT_MODE_OUTPUT(sReg, sBit);
-	  DIRECT_WRITE_LOW(sReg, sBit);
-
+	
     long timeout=1024*samples;
     long value=0;
     for(int i=0; i<samples; i++)
     {
-      // make sure read pins are discharged
-	    DIRECT_MODE_OUTPUT(rReg, rBit);
-	    DIRECT_MODE_INPUT(rReg, rBit);
-
       noInterrupts();
+      DIRECT_MODE_OUTPUT(rReg, rBit);
+      DIRECT_MODE_INPUT(rReg, rBit);
 	    DIRECT_WRITE_HIGH(sReg, sBit);
 	    while(!DIRECT_READ(rReg, rBit) && (value < timeout) ) value++;
 	    DIRECT_WRITE_LOW(sReg, sBit);
@@ -35,14 +33,17 @@ public:
     }
     value_accum  +=value;
     samples_accum+=samples;
+
   }
   float get()
   {
     float value=value_accum/(float)samples_accum;
     value_accum=samples_accum=0;
     
-    baseline++;
-    if(baseline>value) baseline=value;
+    if(baseline==-1.f)
+      baseline=value;
+    else
+      baseline=baseline*0.99f+value*0.01f;
 
     return value-baseline;
   }
@@ -51,6 +52,6 @@ private:
 	volatile IO_REG_TYPE * sReg;
 	IO_REG_TYPE rBit;
 	volatile IO_REG_TYPE * rReg;
-  float baseline=1024.f;
+  float baseline=-1.f;
   long value_accum=0,samples_accum=0;
 };
