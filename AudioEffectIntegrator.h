@@ -53,9 +53,9 @@ public:
     Serial.println(energy);Serial.println();
 */
 
-    double attack_flow=1.-attack_valve;
+    float attack_flow=1.-attack_valve;
 	  while (p < end) {
-      double de=energy_in*attack_flow;
+      float de=energy_in*attack_flow;
       energy    = energy*decay_valve + de;
       energy_in = energy_in          - de;
       (*p++)*=energy;
@@ -65,8 +65,8 @@ public:
   }
 private:
 	audio_block_t *inputQueueArray[1];
-  double energy_in=0.f,energy=0.f;
-  double attack_valve, decay_valve;
+  float energy_in=0.f,energy=0.f;
+  float attack_valve, decay_valve;
 };
 
 

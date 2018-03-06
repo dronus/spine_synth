@@ -3,6 +3,7 @@
 #include <MIDI.h>
 #include <midi_UsbTransport.h>
 #include "AudioEffectIntegrator.h"
+#include "Capacity.h"
 
 // Spine Synth
 //
@@ -56,18 +57,16 @@ AudioConnection          patchCord21(vcaEnv, 0, vcaMixer, 0);
 AudioConnection          patchCord22(accEnv, 0, vcaMixer, 1);
 AudioConnection          patchCord23(vcaMixer, 0, vca, 1);
 AudioConnection          patchCord24(vca, 0, filter3, 0); //vca
-AudioConnection          patchCord5(filter3, 0, dac1, 0);
-AudioConnection          patchCord6(filter3, 0, usb2, 0);
-AudioConnection          patchCord7(filter3, 0, usb2, 1);
+AudioConnection          patchCord5(vca, 0, dac1, 0);
+AudioConnection          patchCord6(vca, 0, usb2, 0);
+AudioConnection          patchCord7(vca, 0, usb2, 1);
 
 static const unsigned sUsbTransportBufferSize = 16;
 typedef midi::UsbTransport<sUsbTransportBufferSize> UsbTransport;
 UsbTransport sUsbTransport;
 MIDI_CREATE_INSTANCE(UsbTransport, sUsbTransport, MIDI);
 
-
-float getDifferentialCapacity(int sendPin, int receivePin1, int receivePin2, int samples, float& total);
-
+Capacity capacities[8];
 
 void setup(void)
 {
@@ -80,6 +79,7 @@ void setup(void)
   pinMode(18,OUTPUT);
   pinMode(16,OUTPUT);
   pinMode(13,OUTPUT);
+  digitalWrite(13,HIGH);
 
   Serial.begin(9600);
 
@@ -89,15 +89,19 @@ void setup(void)
   osc1.amplitude(1.0f);
   osc2.begin(WAVEFORM_SQUARE);
   osc2.amplitude(1.0f);
-  vcfEnv.attack(3.0f); // attack as by TB-303
+  vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
   vcaEnv.attack(3.0f);
+  // vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
   cvMixer.gain(0,1.f);
   cvMixer.gain(1,1.f);
-  vcaMixer.gain(0,1.f);
-  vcaMixer.gain(1,1.f);
+  vcaMixer.gain(0,0.5f);
+  vcaMixer.gain(1,0.5f);
   // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
-  filter3.frequency(5000.);
+  filter3.frequency(15000.);
   Serial.println("spine_synth running.");
+
+  for(int i=0; i<8; i++)
+    capacities[i]=Capacity(0,i+1);
 }
  
 long last_time;
@@ -139,7 +143,7 @@ void loop()
 {
   long time;
   long dt=0;
-  while(dt<10)
+  while(dt<5)
   {
     time=millis();
     dt=time-last_time;
@@ -155,11 +159,6 @@ void loop()
   }
 
   int analogs[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
-
-/*  Serial.print(analogs[0]);
-  Serial.print(" ");
-  Serial.println(analogs[1]);*/
-
 
   // tap tempo
   if(digitals_click[2])
@@ -179,19 +178,29 @@ void loop()
   if(midiEvent){
     Serial.print("MIDI ");Serial.print(midiEvent); Serial.println();
   }
+
+  for(int i=0; i<8; i++)
+    capacities[i].update(8);
+
   if((cycle_length>0 && cycle>cycle_length) || midiEvent==usbMIDI.NoteOn || midiEvent==usbMIDI.NoteOff){
 
     int scale=analogs[9]*12/1024;
 
-    float total=0;
-    float diff=getDifferentialCapacity(8, 9, 10, 512, total);
+    float frequency=0;
+    float volume=0;
 
-    float volume=total;
-    float frequency=-diff/volume+0.25f;
-    frequency*=40.0f;
+    for(int i=0; i<8; i++)
+    {    
+      float total=capacities[i].get();
+      Serial.print(total);Serial.print(" ");
+      if(total>10) {
+         volume=1;
+         frequency=i+12;
+      }      
+    }
+    Serial.println();
+
     frequency=note_to_frequency(frequency,scale);
-
-    if(volume<75.f) volume=0.f;
 
     if(digitals_click[0]) accents[step]=!accents[step];
     digitals_click[0]=false;
@@ -201,17 +210,19 @@ void loop()
     float last_frequency=frequencies[step];
     bool  last_slide    =slides[step];
 
+    int transpose=-21+12*(scale-4);
+
    if(midiEvent==usbMIDI.NoteOn){
-      int candidate=note_to_frequency(usbMIDI.getData1()-21,0.);
+      int candidate=note_to_frequency(usbMIDI.getData1()+transpose,0.);
       if(candidate>last_frequency){
         step++;
         step=step % 16;
-        frequencies[step]=note_to_frequency(usbMIDI.getData1()-21,0.);
+        frequencies[step]=note_to_frequency(usbMIDI.getData1()+transpose,0.);
         accents[step]=(usbMIDI.getData2()>=100);
         slides [step]=false;
       }
     }else if(midiEvent==usbMIDI.NoteOff){
-      if(last_frequency==note_to_frequency(usbMIDI.getData1()-21,0.)){
+      if(last_frequency==note_to_frequency(usbMIDI.getData1()+transpose,0.)){
         step++;
         step=step % 16;
         frequencies[step]=0;
@@ -236,15 +247,15 @@ void loop()
     }
 
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
-    float decay=accents[step] ? base_cycle_length * 1.6f : log_pot(analogs[5])*32.f*base_cycle_length;
-
-    float accent=log_pot(analogs[6]);
+    float decay=accents[step] ? base_cycle_length * 1.6f : log_pot(analogs[5])*8.f*base_cycle_length;
+    float accent=analogs[6]/1024.f;
+    float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]/1024.f);
 
     AudioNoInterrupts();
-    vcfEnv.attack(accents[step] ? base_cycle_length*analogs[3]/1024.f : 3.f);  // accent slew tied to 'resonance' pot like TB-303 does.
-    vcfEnv.decay(decay);
-
-    vcaEnv.decay(300.f); // "TB-303 VEG has 3s decay" (Devilfish docs)
+    vcfEnv.decay(slides[step] ? 10000.f : decay);
+    vcaEnv.decay(slides[step] ? 10000.f : decay * 2.f);
+    accEnv.attack(accent_slew*0.2f);  // accent slew tied to 'resonance' pot like TB-303 does.
+    accEnv.decay (accent_slew);
 
     if(frequencies[step]>0 && (!last_slide || last_frequency==0) ) {
       if(accents[step]) accEnv.pulse(accent);
@@ -280,21 +291,23 @@ void loop()
   float mix_waveform     =analogs[7]/1024.f;
   float filter_cutoff    =log_pot(analogs[2])*4096.0f;
   float filter_resonance =analogs[3]*5.0f/1024.0f;
-  float filter_mod       =log_pot(analogs[4])*7.0f;
+  float filter_mod       =analogs[4]/1024.f;
 
   AudioNoInterrupts();
   if(frequency) osc1.frequency(frequency);
   if(frequency) osc2.frequency(frequency);
   mixer1.gain(0,    mix_waveform);
   mixer1.gain(1,1.f-mix_waveform);
-  filter1.octaveControl(filter_mod);
+  cvMixer.gain(0,filter_mod);
+  cvMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
+  filter1.octaveControl(7.f);
   filter1.resonance(filter_resonance);
   filter1.frequency(filter_cutoff);
-  filter2.octaveControl(filter_mod);
+  filter2.octaveControl(7.f);
   filter2.resonance(filter_resonance);
   filter2.frequency(filter_cutoff);
   AudioInterrupts();
-  
+  /*
     Serial.print("Proc = ");
     Serial.print(AudioProcessorUsage());
     Serial.print(" (");    
@@ -305,5 +318,5 @@ void loop()
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
     Serial.println(dt);
-
+*/
 }
