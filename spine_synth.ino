@@ -1,7 +1,5 @@
 #include <Audio.h>
 #include <math.h> 
-#include <MIDI.h>
-#include <midi_UsbTransport.h>
 #include "AudioEffectIntegrator.h"
 #include "Capacity.h"
 
@@ -26,47 +24,40 @@
 
 
 
-AudioSynthWaveformDc     dc1;
+AudioSynthWaveformDc     dc;
 AudioEffectIntegrator    vcfEnv;
 AudioEffectIntegrator    accEnv;
-AudioMixer4              cvMixer;
-AudioSynthWaveform       osc1;
-AudioSynthWaveform       osc2;
-AudioMixer4              mixer1;
-AudioFilterStateVariable filter1;
-AudioFilterStateVariable filter2;
+AudioMixer4              vcfMixer;
+AudioSynthWaveform       oscSaw;
+AudioSynthWaveform       oscSquare;
+AudioMixer4              oscMixer;
+AudioFilterStateVariable vcf1;
+AudioFilterStateVariable vcf2;
 AudioEffectIntegrator    vcaEnv;
 AudioMixer4              vcaMixer;
 AudioEffectMultiply      vca;
-AudioFilterStateVariable filter3;
-AudioOutputAnalog        dac1;
-AudioOutputUSB           usb2;
-AudioConnection          patchCord3(dc1, 0, vcfEnv, 0);
-AudioConnection          patchCord001(osc1, 0, mixer1, 0);
-AudioConnection          patchCord002(osc2, 0, mixer1, 1);
-AudioConnection          patchCord0(mixer1, 0, filter1, 0);
-AudioConnection          patchCord01(vcfEnv, 0, cvMixer, 0);
-AudioConnection          patchCord31(dc1, 0, accEnv, 0);
-AudioConnection          patchCord02(accEnv, 0, cvMixer, 1);
-AudioConnection          patchCord03(cvMixer, 0, filter1, 1);
-AudioConnection          patchCord1(filter1, 0, filter2, 0);
-AudioConnection          patchCord11(cvMixer, 0, filter2, 1);
-AudioConnection          patchCord2(filter2, 0, vca, 0);
-AudioConnection          patchCord32(dc1, 0, vcaEnv, 0);
-AudioConnection          patchCord21(vcaEnv, 0, vcaMixer, 0);
-AudioConnection          patchCord22(accEnv, 0, vcaMixer, 1);
-AudioConnection          patchCord23(vcaMixer, 0, vca, 1);
-AudioConnection          patchCord24(vca, 0, filter3, 0); //vca
-AudioConnection          patchCord5(vca, 0, dac1, 0);
-AudioConnection          patchCord6(vca, 0, usb2, 0);
-AudioConnection          patchCord7(vca, 0, usb2, 1);
+AudioOutputAnalog        dac;
+AudioOutputUSB           usbOut;
+AudioConnection          patchCord0 (dc       , 0, vcfEnv  , 0);
+AudioConnection          patchCord1 (oscSaw   , 0, oscMixer, 0);
+AudioConnection          patchCord2 (oscSquare, 0, oscMixer, 1);
+AudioConnection          patchCord3 (oscMixer , 0, vcf1    , 0);
+AudioConnection          patchCord4 (vcfEnv   , 0, vcfMixer, 0);
+AudioConnection          patchCord5 (dc       , 0, accEnv  , 0);
+AudioConnection          patchCord6 (accEnv   , 0, vcfMixer, 1);
+AudioConnection          patchCord7 (vcfMixer , 0, vcf1    , 1);
+AudioConnection          patchCord8 (vcf1     , 0, vcf2    , 0);
+AudioConnection          patchCord9 (vcfMixer , 0, vcf2    , 1);
+AudioConnection          patchCord10(vcf2     , 0, vca     , 0);
+AudioConnection          patchCord11(dc       , 0, vcaEnv  , 0);
+AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
+AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
+AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
+AudioConnection          patchCord15(vca      , 0, dac     , 0);
+AudioConnection          patchCord16(vca      , 0, usbOut  , 0);
+AudioConnection          patchCord17(vca      , 0, usbOut  , 1);
 
-static const unsigned sUsbTransportBufferSize = 16;
-typedef midi::UsbTransport<sUsbTransportBufferSize> UsbTransport;
-UsbTransport sUsbTransport;
-MIDI_CREATE_INSTANCE(UsbTransport, sUsbTransport, MIDI);
-
-Capacity capacities[8];
+Capacity capacities[16];
 
 void setup(void)
 {
@@ -84,24 +75,26 @@ void setup(void)
   Serial.begin(9600);
 
   AudioMemory(64);
-  dc1.amplitude(1.0f);
-  osc1.begin(WAVEFORM_SAWTOOTH);
-  osc1.amplitude(1.0f);
-  osc2.begin(WAVEFORM_SQUARE);
-  osc2.amplitude(1.0f);
+  dc.amplitude(1.0f);
+  oscSaw.begin(WAVEFORM_SAWTOOTH);
+  oscSaw.amplitude(1.0f);
+  oscSquare.begin(WAVEFORM_SQUARE);
+  oscSquare.amplitude(1.0f);
   vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
   vcaEnv.attack(3.0f);
   // vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
-  cvMixer.gain(0,1.f);
-  cvMixer.gain(1,1.f);
+  vcfMixer.gain(0,1.f);
+  vcfMixer.gain(1,1.f);
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
   // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
-  filter3.frequency(15000.);
   Serial.println("spine_synth running.");
 
   for(int i=0; i<8; i++)
-    capacities[i]=Capacity(0,i+1);
+    capacities[i]=Capacity(0,i+1);    // pins 1 - 8
+  for(int i=0; i<8; i++)
+    capacities[i+8]=Capacity(0,31-i); // pins 24 - 31 in reverse order
+
 }
  
 long last_time;
@@ -115,9 +108,6 @@ int step =0;
 float frequencies[16];
 bool accents[16];
 bool slides[16];
-
-long last_tap=0;
-
 long taps[4];
 
 float log_pot(int x)
@@ -125,10 +115,9 @@ float log_pot(int x)
   return 1.f-log2(1024-x)/10.f;
 }
 
-int scale_notes[]={0,2,4,5,7,9,11};
-
 float note_to_frequency(int note,int scale)
 {
+  static const int scale_notes[]={0,2,4,5,7,9,11};
   if(scale!=0){
     note+=scale;
     int octave=note/8;
@@ -179,7 +168,7 @@ void loop()
     Serial.print("MIDI ");Serial.print(midiEvent); Serial.println();
   }
 
-  for(int i=0; i<8; i++)
+  for(int i=0; i<16; i++)
     capacities[i].update(8);
 
   if((cycle_length>0 && cycle>cycle_length) || midiEvent==usbMIDI.NoteOn || midiEvent==usbMIDI.NoteOff){
@@ -189,16 +178,16 @@ void loop()
     float frequency=0;
     float volume=0;
 
-    for(int i=0; i<8; i++)
+    for(int i=0; i<16; i++)
     {    
       float total=capacities[i].get();
-      Serial.print(total);Serial.print(" ");
-      if(total>10) {
+      //Serial.print(total); Serial.print(" ");
+      if(total>20.f) {
          volume=1;
          frequency=i+12;
       }      
     }
-    Serial.println();
+    //Serial.println();
 
     frequency=note_to_frequency(frequency,scale);
 
@@ -212,7 +201,7 @@ void loop()
 
     int transpose=-21+12*(scale-4);
 
-   if(midiEvent==usbMIDI.NoteOn){
+    if(midiEvent==usbMIDI.NoteOn){
       int candidate=note_to_frequency(usbMIDI.getData1()+transpose,0.);
       if(candidate>last_frequency){
         step++;
@@ -262,10 +251,6 @@ void loop()
       vcfEnv.noteOn(1.f);
       vcaEnv.noteOn(1.f);
     }
-/*    if(frequencies[step]==0) {
-      vcfEnv.noteOff(); 
-      vcaEnv.noteOff();
-    }*/
     AudioInterrupts();
 
     digitalWrite(13,step%4==0);
@@ -294,18 +279,18 @@ void loop()
   float filter_mod       =analogs[4]/1024.f;
 
   AudioNoInterrupts();
-  if(frequency) osc1.frequency(frequency);
-  if(frequency) osc2.frequency(frequency);
-  mixer1.gain(0,    mix_waveform);
-  mixer1.gain(1,1.f-mix_waveform);
-  cvMixer.gain(0,filter_mod);
-  cvMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
-  filter1.octaveControl(7.f);
-  filter1.resonance(filter_resonance);
-  filter1.frequency(filter_cutoff);
-  filter2.octaveControl(7.f);
-  filter2.resonance(filter_resonance);
-  filter2.frequency(filter_cutoff);
+  if(frequency) oscSaw.frequency(frequency);
+  if(frequency) oscSquare.frequency(frequency);
+  oscMixer.gain(0,    mix_waveform);
+  oscMixer.gain(1,1.f-mix_waveform);
+  vcfMixer.gain(0,filter_mod);
+  vcfMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
+  vcf1.octaveControl(7.f);
+  vcf1.resonance(filter_resonance);
+  vcf1.frequency(filter_cutoff);
+  vcf2.octaveControl(7.f);
+  vcf2.resonance(filter_resonance);
+  vcf2.frequency(filter_cutoff);
   AudioInterrupts();
   /*
     Serial.print("Proc = ");
