@@ -213,23 +213,6 @@ void loop()
     // read octave selection knob
     int octave=analogs[9]*6/1024;
 
-    float frequency=0;
-    float volume=0;
-    // read capacitive touch keyboard
-    for(int i=0; i<16; i++)
-    {    
-      float total=capacities[i].get();
-      //Serial.print(total); Serial.print(" ");
-      if(total>20.f) {
-         volume=1;
-         frequency=i;
-      }      
-    }
-    //Serial.println();
-
-    // calculate frequency of touched note
-    frequency=note_to_frequency(frequency,octave);
-
     // allow to toggle the accent and slide state at any time
     if(digitals_click[0]) accents[step]=!accents[step];
     digitals_click[0]=false;
@@ -262,15 +245,22 @@ void loop()
     }else{
       // No MIDI, advance step to play next note by sequencer.
       step++;
-      step=step % 16;    
+      step=step % 16;   
     }
 
-    // store note from touch keyboard, if any
-    if(volume>0){
-      frequencies[step]=frequency;
-      accents[step]=digitals[0];
-      slides [step]=digitals[1];
+    // read capacitive touch keyboard
+    for(int i=0; i<16; i++)
+    {
+      float total=capacities[i].get();
+      //Serial.print(total); Serial.print(" ");
+      if(total>20.f) {
+        frequencies[step]=note_to_frequency(i,octave);
+        accents[step]=digitals[0];
+        slides [step]=digitals[1];
+        break;
+      }
     }
+    //Serial.println();
 
     // delete button, erase current note
     if(digitals[3]) {
