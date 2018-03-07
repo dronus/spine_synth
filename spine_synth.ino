@@ -1,28 +1,49 @@
-#include <Audio.h>
-#include <math.h> 
-#include "AudioEffectIntegrator.h"
-#include "Capacity.h"
-
-// Spine Synth
+// Spine Synth 303
 //
-// A somewhat TB-303 like subtractive synthesizer.
+// A somewhat TB-303-like subtractive synthesizer for Teensy 3.x ARM Cortex M4
+//
+// Provides 16bit audio out via USB sound device and 12bit line-out via the internal DAC.
 //
 // Several parameters are choosen to behave more or less then a TB-303.
 //
-// Some parameters are choosen to perform easier than a TB-303, eg. some envelope timings tied to sequencer speed.
+// Some parameters are choosen to perform easier than a TB-303, eg. some envelope timings are tied to sequencer speed.
 // The sequencer does not follow the complicated step programming scheme, but only allows to enter notes
 // in realtime into the running sequence.
 //
-// Some of the TB-303 unique behaviours are implemented in an easy and simple manner. 
+// Some of the TB-303 unique behaviours are implemented in an most simple manner. 
 //
 // We do not try to match the sound of the original device, but provide the basic qualities 
 // of it's basic sound and unique features the most simple emulations lack.
 //
 // See the TB-303 service manual and
 // http://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
-// as reference sources of basic operation and parameters.
+// as reference sources for basic operation and parameters.
+//
+// Pinout:
+// 13 : Beat indicator on Teensy internal LED 
+// 14 : Tap tempo momentary pushbutton to GND 
+// 15 : Slide momentary pushbutton to GND 
+// 16 : Slide LED and resitor to GND
+// 17 : Accent momentary pushbutton to GND 
+// 18 : Accent LED and resitor to GND
+// 22 : Delete note momentary pushbutton to VCC
+// A6 : swing pot to GND and VCC
+// A7 : octave pot to GND and VCC
+// A14: Overdrive pot to GND and VCC
+// A15: ACC Mod pot to GND and VCC
+// A16: ENV Decay pot to GND and VCC
+// A17: VCF Env Mod pot to GND and VCC
+// A18: VCF Resonance pot to GND and VCC
+// A19: VCF Cutoff pot to GND and VCC
+// A21: Audio out left , over 100uF to jack
+// A22: Audio out right, over 100uF to jack
 
 
+
+#include <Audio.h>
+#include <math.h> 
+#include "AudioEffectIntegrator.h"
+#include "Capacity.h"
 
 AudioSynthWaveformDc     dc;
 AudioEffectIntegrator    vcfEnv;
@@ -79,11 +100,11 @@ void setup(void)
   vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
   vcaEnv.attack(3.0f);
   // vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
+  // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
   vcfMixer.gain(0,1.f);
   vcfMixer.gain(1,1.f);
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
-  // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
   Serial.println("spine_synth running.");
 
   for(int i=0; i<8; i++)
@@ -111,17 +132,9 @@ float log_pot(int x)
   return 1.f-log2(1024-x)/10.f;
 }
 
-float note_to_frequency(int note,int scale)
+float note_to_frequency(int note,int octave)
 {
-  static const int scale_notes[]={0,2,4,5,7,9,11};
-  if(scale!=0){
-    note+=scale;
-    int octave=note/8;
-    int key   =note%8;
-    note=scale_notes[key]+octave*12;
-    note-=scale;
-  }
-  return 27.5f*exp2(note/12.0f);
+  return 27.5f*exp2(note/12.0f+octave);
 }
 
 void loop()
@@ -169,7 +182,7 @@ void loop()
 
   if((cycle_length>0 && cycle>cycle_length) || midiEvent==usbMIDI.NoteOn || midiEvent==usbMIDI.NoteOff){
 
-    int scale=analogs[9]*12/1024;
+    int octave=analogs[9]*6/1024;
 
     float frequency=0;
     float volume=0;
@@ -180,12 +193,12 @@ void loop()
       //Serial.print(total); Serial.print(" ");
       if(total>20.f) {
          volume=1;
-         frequency=i+12;
+         frequency=i;
       }      
     }
     //Serial.println();
 
-    frequency=note_to_frequency(frequency,scale);
+    frequency=note_to_frequency(frequency,octave);
 
     if(digitals_click[0]) accents[step]=!accents[step];
     digitals_click[0]=false;
@@ -195,19 +208,19 @@ void loop()
     float last_frequency=frequencies[step];
     bool  last_slide    =slides[step];
 
-    int transpose=-21+12*(scale-4);
+    int transpose=-21-12*2;
 
     if(midiEvent==usbMIDI.NoteOn){
-      int candidate=note_to_frequency(usbMIDI.getData1()+transpose,0.);
+      int candidate=note_to_frequency(usbMIDI.getData1()+transpose,octave);
       if(candidate>last_frequency){
         step++;
         step=step % 16;
-        frequencies[step]=note_to_frequency(usbMIDI.getData1()+transpose,0.);
+        frequencies[step]=note_to_frequency(usbMIDI.getData1()+transpose,octave);
         accents[step]=(usbMIDI.getData2()>=100);
         slides [step]=false;
       }
     }else if(midiEvent==usbMIDI.NoteOff){
-      if(last_frequency==note_to_frequency(usbMIDI.getData1()+transpose,0.)){
+      if(last_frequency==note_to_frequency(usbMIDI.getData1()+transpose,octave)){
         step++;
         step=step % 16;
         frequencies[step]=0;
@@ -305,6 +318,6 @@ void loop()
     Serial.print(" (");    
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
-*/    Serial.println(dt);
-
+    Serial.println(dt);
+  */
 }
