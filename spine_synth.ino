@@ -2,7 +2,11 @@
 //
 // A somewhat TB-303-like subtractive synthesizer for Teensy 3.x ARM Cortex M4
 //
+// Simple UI made of several pots, pushbuttons, LEDs and 16 touch sensitive keys (anything conductive will do).
+// 
 // Provides 16bit audio out via USB sound device and 12bit line-out via the internal DAC.
+// 
+// Provides MIDI-in via USB
 //
 // Several parameters are choosen to behave more or less then a TB-303.
 //
@@ -10,22 +14,34 @@
 // The sequencer does not follow the complicated step programming scheme, but only allows to enter notes
 // in realtime into the running sequence.
 //
-// Some of the TB-303 unique behaviours are implemented in an most simple manner. 
+// Some of the TB-303 unique behaviours are implemented in a most simple manner. 
 //
 // We do not try to match the sound of the original device, but provide the basic qualities 
-// of it's basic sound and unique features the most simple emulations lack.
+// of it's sound and unique features the most simple emulations lack.
 //
 // See the TB-303 service manual and
 // http://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
 // as reference sources for basic operation and parameters.
 //
+// Hardware needed:
+//
+// 1x Teensy 3.5 or 3.6
+// 4x momentary pushbuttons, 3 of them with LEDs or additional LEDs with resistors.
+// 8x Variable resistors, 50kOhm linear, preferrably robust and creamy ones.
+// 16x touch key, can be just a piece of copper foil or pcb.
+// 1x stereo audio socket (3.5mm, 6.3mm line or dual RCA)
+// 2x 100uF 5v min. electrolytic capacitor
+//
 // Pinout:
-// 13 : Beat indicator on Teensy internal LED 
+//  0 : Send pin for capacitive touch keyboard. Connect to all keys via 1M resistors
+// 1-8: Lower keyboard keys. Connect to 8 keys.
+// 24-31: Upper keyboard keys. Connect to another 8 keys in reverse order.
+// 13 : Beat indicator on tap tempo button LED and resistor to GND, also Teensy internal LED
 // 14 : Tap tempo momentary pushbutton to GND 
 // 15 : Slide momentary pushbutton to GND 
-// 16 : Slide LED and resitor to GND
+// 16 : Slide LED and resistor to GND
 // 17 : Accent momentary pushbutton to GND 
-// 18 : Accent LED and resitor to GND
+// 18 : Accent LED and resistor to GND
 // 22 : Delete note momentary pushbutton to VCC
 // A6 : swing pot to GND and VCC
 // A7 : octave pot to GND and VCC
@@ -45,6 +61,7 @@
 #include "AudioEffectIntegrator.h"
 #include "Capacity.h"
 
+// configure Teensy Audio library node network
 AudioSynthWaveformDc     dc;
 AudioEffectIntegrator    vcfEnv;
 AudioEffectIntegrator    accEnv;
@@ -76,6 +93,7 @@ AudioConnection          patchCord15(distort  , 0, dac     , 0);
 AudioConnection          patchCord16(distort  , 0, usbOut  , 0);
 AudioConnection          patchCord17(distort  , 0, usbOut  , 1);
 
+// capacitive touch keys
 Capacity capacities[16];
 
 void setup(void)
@@ -111,7 +129,6 @@ void setup(void)
     capacities[i]=Capacity(0,i+1);    // pins 1 - 8
   for(int i=0; i<8; i++)
     capacities[i+8]=Capacity(0,31-i); // pins 24 - 31 in reverse order
-
 }
  
 long last_time;
@@ -127,11 +144,13 @@ bool accents[16];
 bool slides[16];
 long taps[4];
 
+// emulate logarithmic potentiometer on linear one
 float log_pot(int x)
 {
   return 1.f-log2(1024-x)/10.f;
 }
 
+// get the frequency in Hz for given semitone.
 float note_to_frequency(int note,int octave)
 {
   return 27.5f*exp2(note/12.0f+octave);
@@ -141,6 +160,7 @@ void loop()
 {
   long time;
   long dt=0;
+  // keep almost constant loop timing
   while(dt<5)
   {
     time=millis();
@@ -149,6 +169,7 @@ void loop()
   }
   last_time = time;
 
+  // read all digital buttons and provide some change state (digitals_click)
   bool digitals[]={!digitalRead(17),!digitalRead(15),!digitalRead(14),digitalRead(22)};
   for(int i=0;i<4; i++)
   {
@@ -156,9 +177,10 @@ void loop()
     digitals_last[i]=digitals[i];
   }
 
+  // read all analog knobs
   int analogs[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
 
-  // tap tempo
+  // read tempo tap button and adapt tempo after four clicks
   if(digitals_click[2])
   {
     digitals_click[2]=false;
@@ -170,23 +192,30 @@ void loop()
     taps[0]=time;
   }
 
+  // update cycle time (time into current sequence step)
   cycle+=dt;
 
+  // read MIDI events
   int midiEvent=usbMIDI.read() ? usbMIDI.getType() : 0;
   if(midiEvent){
     Serial.print("MIDI ");Serial.print(midiEvent); Serial.println();
   }
 
+  // update capacitive keyboard buttons every tick for most accurate measurements
   for(int i=0; i<16; i++)
     capacities[i].update(8);
 
+  // check if a new tone has to be played:
+  // Either the current cycle is over, so the sequencer need to advance one step,
+  // or the MIDI input provides some new note.
   if((cycle_length>0 && cycle>cycle_length) || midiEvent==usbMIDI.NoteOn || midiEvent==usbMIDI.NoteOff){
 
+    // read octave selection knob
     int octave=analogs[9]*6/1024;
 
     float frequency=0;
     float volume=0;
-
+    // read capacitive touch keyboard
     for(int i=0; i<16; i++)
     {    
       float total=capacities[i].get();
@@ -198,8 +227,10 @@ void loop()
     }
     //Serial.println();
 
+    // calculate frequency of touched note
     frequency=note_to_frequency(frequency,octave);
 
+    // allow to toggle the accent and slide state at any time
     if(digitals_click[0]) accents[step]=!accents[step];
     digitals_click[0]=false;
     if(digitals_click[1]) slides [step]=!slides [step];
@@ -210,6 +241,7 @@ void loop()
 
     int transpose=-21-12*2;
 
+    // handle MIDI events. Advance step if needed.
     if(midiEvent==usbMIDI.NoteOn){
       int candidate=note_to_frequency(usbMIDI.getData1()+transpose,octave);
       if(candidate>last_frequency){
@@ -228,57 +260,66 @@ void loop()
         slides [step]=false;
       }
     }else{
+      // No MIDI, advance step to play next note by sequencer.
       step++;
       step=step % 16;    
     }
 
+    // store note from touch keyboard, if any
     if(volume>0){
       frequencies[step]=frequency;
       accents[step]=digitals[0];
       slides [step]=digitals[1];
     }
 
+    // delete button, erase current note
     if(digitals[3]) {
       frequencies[step]=0;
       accents[step]=false;
       slides [step]=false;
     }
 
+    // compute per-note synthesis parameters. Further parameters are updated later per tick.
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
     float decay=accents[step] ? base_cycle_length * 1.6f : log_pot(analogs[5])*8.f*base_cycle_length;
     float accent=analogs[6]/1024.f;
     float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]/1024.f);
-
+    // set per-note synthesis parameters.
     AudioNoInterrupts();
     vcfEnv.decay(slides[step] ? 10000.f : decay);
     vcaEnv.decay(slides[step] ? 10000.f : decay * 2.f);
     accEnv.attack(accent_slew*0.2f);  // accent slew tied to 'resonance' pot like TB-303 does.
     accEnv.decay (accent_slew);
-
     if(frequencies[step]>0 && (!last_slide || last_frequency==0) ) {
       if(accents[step]) accEnv.pulse(accent);
       vcfEnv.noteOn(1.f);
       vcaEnv.noteOn(1.f);
     }
-
     AudioInterrupts();
 
+    // update LEDs
     digitalWrite(13,step%4==0);
     digitalWrite(18,accents[step]);
     digitalWrite(16,slides [step]);
 
+    // compute next cycle time
     cycle-=cycle_length;
-
     if(midiEvent)
+      // if running on MIDI, we disengage the sequencer by cycle_length=0.
       cycle_length=0;
-    else if(step%2==0)  // swing
+    else if(step%2==0)  
+      // swing even beat
       cycle_length=base_cycle_length*(1.f-analogs[8]/1024.f*0.5f);
     else
+      // swing odd beat
       cycle_length=base_cycle_length*(1.f+analogs[8]/1024.f*0.5f);
   }
 
-  float frequency=frequencies[step];
+  // every tick (~5ms) compute some synthesis parameters.
+  float frequency=frequencies[step];  
   if(slides[step]){
+    // compute frequency by slide.
+    // TODO we should use a signal-controlled oscilator to handle this updates in Audio engine.
     float next_f=frequencies[(step+1)%16];
     float t=((float)cycle)/base_cycle_length;
     frequency=frequency*(1.f-t)+next_f*t;
@@ -295,7 +336,7 @@ void loop()
     distortion_map[32-i]= y;
   }
   distortion_map[16]=0.f;
-
+  // update synthesis parameters.
   AudioNoInterrupts();
   distort.shape(distortion_map,33);
   if(frequency) oscSaw.frequency(frequency);
@@ -308,6 +349,8 @@ void loop()
   vcf2.resonance(filter_resonance);
   vcf2.frequency(filter_cutoff);
   AudioInterrupts();
+
+  // print CPU, memory usage and timing informations
   /*
     Serial.print("Proc = ");
     Serial.print(AudioProcessorUsage());

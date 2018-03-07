@@ -1,4 +1,13 @@
-// #include "Arduino.h"
+// a more simple approach for fast capacitive touch keys
+// using only the hardware abstraction definitions from CapacitiveSensor.h
+// (tested on Cortex-M4)
+//
+// The sensor should be updated in a regular manner by calling update(samples)
+// and can be read back by get().
+//
+// get() returns a normalized value using every sample made by update() between calls.
+//
+
 #include "CapacitiveSensor.h"
 
 class Capacity
