@@ -156,17 +156,22 @@ float note_to_frequency(int note,int octave)
   return 27.5f*exp2(note/12.0f+octave);
 }
 
+
+int midi_note_on=-1;
+
 void loop()
 {
   long time;
   long dt=0;
   // keep almost constant loop timing
+  // and update cycle time (time into current sequence step)
   while(dt<5)
   {
     time=millis();
     dt=time-last_time;
     delay(1);
   }
+  cycle+=dt;
   last_time = time;
 
   // read all digital buttons and provide some change state (digitals_click)
@@ -180,6 +185,10 @@ void loop()
   // read all analog knobs
   int analogs[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
 
+  // update capacitive keyboard buttons every tick for most accurate measurements
+  for(int i=0; i<16; i++)
+    capacities[i].update(8);
+
   // read tempo tap button and adapt tempo after four clicks
   if(digitals_click[2])
   {
@@ -190,77 +199,65 @@ void loop()
     for(int i=2; i>=0; i--)
       taps[i+1]=taps[i];
     taps[0]=time;
+
+    // also clear midi state to allow recover from stuck MIDI notes
+    midi_note_on=-1;
   }
 
-  // update cycle time (time into current sequence step)
-  cycle+=dt;
+  int trigger=false;
 
-  // read MIDI events
-  int midiEvent=usbMIDI.read() ? usbMIDI.getType() : 0;
-  if(midiEvent){
+  // do MIDI events
+  while(usbMIDI.read()){
+    int midiEvent=usbMIDI.getType();
+    int midiData1=usbMIDI.getData1();
+    int midiData2=usbMIDI.getData2();
     Serial.print("MIDI ");Serial.print(midiEvent); Serial.println();
-  }
 
-  // update capacitive keyboard buttons every tick for most accurate measurements
-  for(int i=0; i<16; i++)
-    capacities[i].update(8);
+    // handle incoming MIDI notes, priority on bright ones
+    // TODO check how other monophonic instruments handle MIDI
+    if(midiEvent==usbMIDI.NoteOn && midiData1>midi_note_on){
+      // read octave selection knob
+      int octave=analogs[9]*6/1024;
+      int transpose=-21-12*2;
+      frequencies[step]=note_to_frequency(midiData1+transpose,octave);
+      accents[step]=(midiData2>=100);
+      slides [step]=false;
+      trigger=true;   // trigger note
+      cycle_length=0; // disengage sequencer
+      midi_note_on=midiData1;
+    }else if(midiEvent==usbMIDI.NoteOff && midiData1==midi_note_on)
+      midi_note_on=-1;
+  };
 
-  // check if a new tone has to be played:
-  // Either the current cycle is over, so the sequencer need to advance one step,
-  // or the MIDI input provides some new note.
-  if((cycle_length>0 && cycle>cycle_length) || midiEvent==usbMIDI.NoteOn || midiEvent==usbMIDI.NoteOff){
+  // do sequencer.
+  if(cycle_length && cycle>=cycle_length){
 
-    // read octave selection knob
-    int octave=analogs[9]*6/1024;
-
-    // allow to toggle the accent and slide state at any time
+    // allow to toggle the accent and slide state of the ongoing note at any time
     if(digitals_click[0]) accents[step]=!accents[step];
     digitals_click[0]=false;
     if(digitals_click[1]) slides [step]=!slides [step];
     digitals_click[1]=false;
 
-    float last_frequency=frequencies[step];
     bool  last_slide    =slides[step];
 
-    int transpose=-21-12*2;
+    // Advance step to play next note by sequencer.
+    step++;
+    step=step % 16;
 
-    // handle MIDI events. Advance step if needed.
-    if(midiEvent==usbMIDI.NoteOn){
-      int candidate=note_to_frequency(usbMIDI.getData1()+transpose,octave);
-      if(candidate>last_frequency){
-        step++;
-        step=step % 16;
-        frequencies[step]=note_to_frequency(usbMIDI.getData1()+transpose,octave);
-        accents[step]=(usbMIDI.getData2()>=100);
-        slides [step]=false;
-      }
-    }else if(midiEvent==usbMIDI.NoteOff){
-      if(last_frequency==note_to_frequency(usbMIDI.getData1()+transpose,octave)){
-        step++;
-        step=step % 16;
-        frequencies[step]=0;
-        accents[step]=false;
-        slides [step]=false;
-      }
-    }else{
-      // No MIDI, advance step to play next note by sequencer.
-      step++;
-      step=step % 16;   
-    }
-
+    // read octave selection knob
+    int octave=analogs[9]*6/1024;
     // read capacitive touch keyboard
     for(int i=0; i<16; i++)
     {
       float total=capacities[i].get();
-      //Serial.print(total); Serial.print(" ");
+      Serial.print(total); Serial.print(" ");
       if(total>20.f) {
         frequencies[step]=note_to_frequency(i,octave);
         accents[step]=digitals[0];
         slides [step]=digitals[1];
-        break;
       }
     }
-    //Serial.println();
+    Serial.println();
 
     // delete button, erase current note
     if(digitals[3]) {
@@ -269,6 +266,23 @@ void loop()
       slides [step]=false;
     }
 
+    // compute next cycle time
+    cycle-=cycle_length;
+
+    // compute next cycle length
+    // swing even / odd beat if needed.
+    cycle_length=base_cycle_length*(1.f-analogs[8]/1024.f*((step%2==0) ? -0.5f : 0.5f));
+
+    // trigger note
+    if(frequencies[step] && !last_slide)
+      trigger=true;
+
+    // update beat LED
+    digitalWrite(13,step%4==0);
+  }  
+
+  // start playing a new note
+  if(trigger){
     // compute per-note synthesis parameters. Further parameters are updated later per tick.
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
     float decay=accents[step] ? base_cycle_length * 1.6f : log_pot(analogs[5])*8.f*base_cycle_length;
@@ -280,29 +294,14 @@ void loop()
     vcaEnv.decay(slides[step] ? 10000.f : decay * 2.f);
     accEnv.attack(accent_slew*0.2f);  // accent slew tied to 'resonance' pot like TB-303 does.
     accEnv.decay (accent_slew);
-    if(frequencies[step]>0 && (!last_slide || last_frequency==0) ) {
-      if(accents[step]) accEnv.pulse(accent);
-      vcfEnv.noteOn(1.f);
-      vcaEnv.noteOn(1.f);
-    }
+    if(accents[step]) accEnv.pulse(accent);
+    vcfEnv.noteOn(1.f);
+    vcaEnv.noteOn(1.f);
     AudioInterrupts();
 
     // update LEDs
-    digitalWrite(13,step%4==0);
     digitalWrite(18,accents[step]);
     digitalWrite(16,slides [step]);
-
-    // compute next cycle time
-    cycle-=cycle_length;
-    if(midiEvent)
-      // if running on MIDI, we disengage the sequencer by cycle_length=0.
-      cycle_length=0;
-    else if(step%2==0)  
-      // swing even beat
-      cycle_length=base_cycle_length*(1.f-analogs[8]/1024.f*0.5f);
-    else
-      // swing odd beat
-      cycle_length=base_cycle_length*(1.f+analogs[8]/1024.f*0.5f);
   }
 
   // every tick (~5ms) compute some synthesis parameters.
