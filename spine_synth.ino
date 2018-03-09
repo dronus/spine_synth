@@ -250,14 +250,14 @@ void loop()
     for(int i=0; i<16; i++)
     {
       float total=capacities[i].get();
-      Serial.print(total); Serial.print(" ");
-      if(total>20.f) {
+//      Serial.print(total); Serial.print(" ");
+      if(total>30.f) {
         frequencies[step]=note_to_frequency(i,octave);
         accents[step]=digitals[0];
         slides [step]=digitals[1];
       }
     }
-    Serial.println();
+//    Serial.println();
 
     // delete button, erase current note
     if(digitals[3]) {
@@ -285,7 +285,7 @@ void loop()
   if(trigger){
     // compute per-note synthesis parameters. Further parameters are updated later per tick.
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
-    float decay=accents[step] ? base_cycle_length * 1.6f : log_pot(analogs[5])*8.f*base_cycle_length;
+    float decay=accents[step] ? base_cycle_length * 1.6f : analogs[5]/1024.f*8.f*base_cycle_length;
     float accent=analogs[6]/1024.f;
     float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]/1024.f);
     // set per-note synthesis parameters.
@@ -314,8 +314,8 @@ void loop()
     frequency=frequency*(1.f-t)+next_f*t;
   }
   float filter_cutoff    =log_pot(analogs[2])*4096.0f;
-  float filter_resonance =analogs[3]*5.0f/1024.0f;
-  float filter_mod       =analogs[4]/1024.f;
+  float filter_resonance =analogs[3]*4.0f/1024.f;
+  float filter_mod       =analogs[4]*2.0f/1024.f;
   float distortion_map[33];
   float distortion       =0.25f+(1.f-analogs[7]/1024.f)*0.75f;
   for(int i=0; i<16; i++){
