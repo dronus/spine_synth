@@ -123,6 +123,7 @@ void setup(void)
   vcfMixer.gain(1,1.f);
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
+  dac.analogReference(EXTERNAL);
   Serial.println("spine_synth running.");
 
   for(int i=0; i<8; i++)
@@ -317,10 +318,11 @@ void loop()
   float filter_resonance =analogs[3]*4.0f/1024.f;
   float filter_mod       =analogs[4]*2.0f/1024.f;
   float distortion_map[33];
-  float distortion       =0.25f+(1.f-analogs[7]/1024.f)*0.75f;
+  float distortion       =analogs[7]/1024.f; 
   for(int i=0; i<16; i++){
     float x=1.f-i/16.f;
-    float y=powf(abs(x),distortion);
+    //float y=powf(abs(x),0.25f+(1.f-distortion)*0.75f);
+    float y=x*distortion*1.f;
     distortion_map[i   ]=-y;
     distortion_map[32-i]= y;
   }
