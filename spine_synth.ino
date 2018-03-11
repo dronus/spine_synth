@@ -54,12 +54,11 @@
 // A21: Audio out left , over 100uF to jack
 // A22: Audio out right, over 100uF to jack
 
-
-
 #include <Audio.h>
 #include <math.h> 
 #include "AudioEffectIntegrator.h"
 #include "Capacity.h"
+
 
 // configure Teensy Audio library node network
 AudioSynthWaveformDc     dc;
@@ -72,7 +71,7 @@ AudioFilterStateVariable vcf2;
 AudioEffectIntegrator    vcaEnv;
 AudioMixer4              vcaMixer;
 AudioEffectMultiply      vca;
-AudioEffectWaveshaper    distort;
+AudioMixer4              volMixer;
 AudioOutputAnalog        dac;
 AudioOutputUSB           usbOut;
 AudioConnection          patchCord0 (dc       , 0, vcfEnv  , 0);
@@ -88,10 +87,10 @@ AudioConnection          patchCord11(dc       , 0, vcaEnv  , 0);
 AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
 AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
 AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
-AudioConnection          patchCord18(vca      , 0, distort , 0);
-AudioConnection          patchCord15(distort  , 0, dac     , 0);
-AudioConnection          patchCord16(distort  , 0, usbOut  , 0);
-AudioConnection          patchCord17(distort  , 0, usbOut  , 1);
+AudioConnection          patchCord18(vca      , 0, volMixer, 0);
+AudioConnection          patchCord15(volMixer , 0, dac     , 0);
+AudioConnection          patchCord16(volMixer , 0, usbOut  , 0);
+AudioConnection          patchCord17(volMixer , 0, usbOut  , 1);
 
 // capacitive touch keys
 Capacity capacities[16];
@@ -159,7 +158,7 @@ float note_to_frequency(int note,int octave)
 
 
 int midi_note_on=-1;
-
+float analogs[10];
 void loop()
 {
   long time;
@@ -184,8 +183,14 @@ void loop()
   }
 
   // read all analog knobs
-  int analogs[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
-
+  int analogs_raw[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
+  for(int i=2; i<10; i++){
+    float target=analogs_raw[i]*(1023.f+3.f)/1023.f-1.5f;
+    if(abs(analogs[i]-target)>1.5f)
+      analogs[i]=max(0.f, min(1023.f,analogs[i]*0.9f+target*0.1f));
+//    Serial.print(analogs[i]);Serial.print(" ");
+  }
+//  Serial.println();
   // update capacitive keyboard buttons every tick for most accurate measurements
   for(int i=0; i<16; i++)
     capacities[i].update(8);
@@ -317,19 +322,10 @@ void loop()
   float filter_cutoff    =log_pot(analogs[2])*4096.0f;
   float filter_resonance =analogs[3]*4.0f/1024.f;
   float filter_mod       =analogs[4]*2.0f/1024.f;
-  float distortion_map[33];
-  float distortion       =analogs[7]/1024.f; 
-  for(int i=0; i<16; i++){
-    float x=1.f-i/16.f;
-    //float y=powf(abs(x),0.25f+(1.f-distortion)*0.75f);
-    float y=x*distortion*1.f;
-    distortion_map[i   ]=-y;
-    distortion_map[32-i]= y;
-  }
-  distortion_map[16]=0.f;
+  float volume           =analogs[7]/1024.f;
+
   // update synthesis parameters.
   AudioNoInterrupts();
-  distort.shape(distortion_map,33);
   if(frequency) oscSaw.frequency(frequency);
   vcfMixer.gain(0,filter_mod);
   vcfMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
@@ -339,6 +335,7 @@ void loop()
   vcf2.octaveControl(7.f);
   vcf2.resonance(filter_resonance);
   vcf2.frequency(filter_cutoff);
+  volMixer.gain(0,volume);
   AudioInterrupts();
 
   // print CPU, memory usage and timing informations
@@ -354,4 +351,5 @@ void loop()
     Serial.println(")");
     Serial.println(dt);
   */
+
 }
