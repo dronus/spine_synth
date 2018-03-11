@@ -122,7 +122,7 @@ void setup(void)
   vcfMixer.gain(1,1.f);
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
-  dac.analogReference(EXTERNAL);
+  dac.analogReference(INTERNAL);
   Serial.println("spine_synth running.");
 
   for(int i=0; i<8; i++)
@@ -145,9 +145,9 @@ bool slides[16];
 long taps[4];
 
 // emulate logarithmic potentiometer on linear one
-float log_pot(int x)
+float log_pot(float x)
 {
-  return 1.f-log2(1024-x)/10.f;
+  return 1.f-log2(1024.f-x*1023.f)/10.f;
 }
 
 // get the frequency in Hz for given semitone.
@@ -184,13 +184,14 @@ void loop()
 
   // read all analog knobs
   int analogs_raw[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
+  float threshold=1.f/1024.f;
   for(int i=2; i<10; i++){
-    float target=analogs_raw[i]*(1023.f+3.f)/1023.f-1.5f;
-    if(abs(analogs[i]-target)>1.5f)
-      analogs[i]=max(0.f, min(1023.f,analogs[i]*0.9f+target*0.1f));
-//    Serial.print(analogs[i]);Serial.print(" ");
+    float target=(analogs_raw[i]/1023.f)*(1.f+2.f*threshold)-threshold;
+    if(abs(analogs[i]-target)>threshold)
+      analogs[i]=max(0.f, min(1.f,analogs[i]*0.9f+target*0.1f));
+    Serial.print(analogs[i],3);Serial.print(" ");
   }
-//  Serial.println();
+  Serial.println();
   // update capacitive keyboard buttons every tick for most accurate measurements
   for(int i=0; i<16; i++)
     capacities[i].update(8);
@@ -223,7 +224,7 @@ void loop()
     // TODO check how other monophonic instruments handle MIDI
     if(midiEvent==usbMIDI.NoteOn && midiData1>midi_note_on){
       // read octave selection knob
-      int octave=analogs[9]*6/1024;
+      int octave=analogs[9]*6;
       int transpose=-21-12*2;
       frequencies[step]=note_to_frequency(midiData1+transpose,octave);
       accents[step]=(midiData2>=100);
@@ -251,7 +252,7 @@ void loop()
     step=step % 16;
 
     // read octave selection knob
-    int octave=analogs[9]*6/1024;
+    int octave=analogs[9]*6;
     // read capacitive touch keyboard
     for(int i=0; i<16; i++)
     {
@@ -277,7 +278,7 @@ void loop()
 
     // compute next cycle length
     // swing even / odd beat if needed.
-    cycle_length=base_cycle_length*(1.f-analogs[8]/1024.f*((step%2==0) ? -0.5f : 0.5f));
+    cycle_length=base_cycle_length*(1.f-analogs[8]*((step%2==0) ? -0.5f : 0.5f));
 
     // trigger note
     if(frequencies[step] && !last_slide)
@@ -291,9 +292,9 @@ void loop()
   if(trigger){
     // compute per-note synthesis parameters. Further parameters are updated later per tick.
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
-    float decay=accents[step] ? base_cycle_length * 1.6f : analogs[5]/1024.f*8.f*base_cycle_length;
-    float accent=analogs[6]/1024.f;
-    float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]/1024.f);
+    float decay=accents[step] ? base_cycle_length * 1.6f : analogs[5]*8.f*base_cycle_length;
+    float accent=analogs[6];
+    float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]);
     // set per-note synthesis parameters.
     AudioNoInterrupts();
     vcfEnv.decay(slides[step] ? 10000.f : decay);
@@ -320,9 +321,9 @@ void loop()
     frequency=frequency*(1.f-t)+next_f*t;
   }
   float filter_cutoff    =log_pot(analogs[2])*4096.0f;
-  float filter_resonance =analogs[3]*4.0f/1024.f;
-  float filter_mod       =analogs[4]*2.0f/1024.f;
-  float volume           =analogs[7]/1024.f;
+  float filter_resonance =analogs[3]*4.0f;
+  float filter_mod       =analogs[4]*2.0f;
+  float volume           =analogs[7];
 
   // update synthesis parameters.
   AudioNoInterrupts();
