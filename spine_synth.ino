@@ -72,7 +72,8 @@ AudioEffectIntegrator    vcaEnv;
 AudioMixer4              vcaMixer;
 AudioEffectMultiply      vca;
 AudioMixer4              volMixer;
-AudioOutputAnalog        dac;
+AudioMixer4              invMixer;
+AudioOutputAnalogStereo  dacs;
 AudioOutputUSB           usbOut;
 AudioConnection          patchCord0 (dc       , 0, vcfEnv  , 0);
 AudioConnection          patchCord3 (oscSaw   , 0, vcf1    , 0);
@@ -88,9 +89,11 @@ AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
 AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
 AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
 AudioConnection          patchCord18(vca      , 0, volMixer, 0);
-AudioConnection          patchCord15(volMixer , 0, dac     , 0);
+AudioConnection          patchCord15(volMixer , 0, invMixer, 0);
+AudioConnection          patchCord19(volMixer , 0, dacs    , 0);
+AudioConnection          patchCord20(invMixer , 0, dacs    , 1);
 AudioConnection          patchCord16(volMixer , 0, usbOut  , 0);
-AudioConnection          patchCord17(volMixer , 0, usbOut  , 1);
+AudioConnection          patchCord17(invMixer , 0, usbOut  , 1);
 
 // capacitive touch keys
 Capacity capacities[16];
@@ -122,7 +125,8 @@ void setup(void)
   vcfMixer.gain(1,1.f);
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
-  dac.analogReference(INTERNAL);
+  invMixer.gain(0,-1.f);
+  dacs.analogReference(INTERNAL);
   Serial.println("spine_synth running.");
 
   for(int i=0; i<8; i++)
