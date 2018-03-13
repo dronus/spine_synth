@@ -162,6 +162,8 @@ float note_to_frequency(int note,int octave)
 
 
 int midi_note_on=-1;
+int midi_clock_cycle=0;
+int midi_clock_last=0;
 float analogs[10];
 void loop()
 {
@@ -222,13 +224,12 @@ void loop()
     int midiEvent=usbMIDI.getType();
     int midiData1=usbMIDI.getData1();
     int midiData2=usbMIDI.getData2();
-    Serial.print("MIDI ");Serial.print(midiEvent); Serial.println();
+    //  Serial.print("MIDI ");Serial.print(midiEvent); Serial.print(" "); Serial.print(midiData1); Serial.print(" "); Serial.print(midiData2); Serial.println();
 
     // handle incoming MIDI notes, priority on bright ones
     // TODO check how other monophonic instruments handle MIDI
     if(midiEvent==usbMIDI.NoteOn && midiData1>midi_note_on){
       // read octave selection knob
-      int octave=analogs[9]*6;
       int transpose=-21-12*2;
       frequencies[step]=note_to_frequency(midiData1+transpose,octave);
       accents[step]=(midiData2>=100);
@@ -238,6 +239,24 @@ void loop()
       midi_note_on=midiData1;
     }else if(midiEvent==usbMIDI.NoteOff && midiData1==midi_note_on)
       midi_note_on=-1;
+    else if(midiEvent==usbMIDI.Clock){
+      if(midi_clock_cycle%6==0)
+      {
+        step=(midi_clock_cycle/6+15)%16;
+        cycle=base_cycle_length=cycle_length=(time-midi_clock_last)*1.2f;
+        midi_clock_last=time;
+      }
+      midi_clock_cycle++;
+    }else if(midiEvent==usbMIDI.Start){
+      cycle=base_cycle_length;
+      midi_clock_cycle=0;
+    }else if(midiEvent==usbMIDI.Stop){
+      midi_clock_cycle=0;
+      cycle_length=0;
+    }else if(midiEvent==usbMIDI.SongPosition){
+      int pos=midiData1 + (midiData2<<7);
+      midi_clock_cycle=pos;
+    }
   };
 
   // do sequencer.
