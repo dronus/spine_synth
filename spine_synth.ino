@@ -35,6 +35,7 @@
 // Pinout:
 //  0 : Send pin for capacitive touch keyboard. Connect to all keys via 1M resistors
 // 1-8: Lower keyboard keys. Connect to 8 keys.
+// 9-12: Octave selector 10 position 4 bit switch to VCC.
 // 24-31: Upper keyboard keys. Connect to another 8 keys in reverse order.
 // 13 : Beat indicator on tap tempo button LED and resistor to GND, also Teensy internal LED
 // 14 : Tap tempo momentary pushbutton to GND 
@@ -43,16 +44,16 @@
 // 17 : Accent momentary pushbutton to GND 
 // 18 : Accent LED and resistor to GND
 // 22 : Delete note momentary pushbutton to VCC
-// A6 : swing pot to GND and VCC
-// A7 : octave pot to GND and VCC
-// A14: Overdrive pot to GND and VCC
+// A5 : free
+// A6 : Swing pot to GND and VCC
+// A14: OSC Mix to GND and VCC
 // A15: ACC Mod pot to GND and VCC
 // A16: ENV Decay pot to GND and VCC
 // A17: VCF Env Mod pot to GND and VCC
 // A18: VCF Resonance pot to GND and VCC
 // A19: VCF Cutoff pot to GND and VCC
-// A21: Audio out left , over 100uF to jack
-// A22: Audio out right, over 100uF to jack
+// A21: Audio out left , over 220 ohms, volume pot left, volume pot slider, 100uF  to jack
+// A22: Audio out right, over 220 ohms, volume pot right, 100uF to jack
 
 #include <Audio.h>
 #include <math.h> 
@@ -66,17 +67,20 @@ AudioEffectIntegrator    vcfEnv;
 AudioEffectIntegrator    accEnv;
 AudioMixer4              vcfMixer;
 AudioSynthWaveform       oscSaw;
+AudioSynthWaveform       oscSquare;
+AudioMixer4              oscMixer;
 AudioFilterStateVariable vcf1;
 AudioFilterStateVariable vcf2;
 AudioEffectIntegrator    vcaEnv;
 AudioMixer4              vcaMixer;
 AudioEffectMultiply      vca;
-AudioMixer4              volMixer;
 AudioMixer4              invMixer;
 AudioOutputAnalogStereo  dacs;
 AudioOutputUSB           usbOut;
 AudioConnection          patchCord0 (dc       , 0, vcfEnv  , 0);
-AudioConnection          patchCord3 (oscSaw   , 0, vcf1    , 0);
+AudioConnection          patchCord31(oscSaw   , 0, oscMixer, 0);
+AudioConnection          patchCord32(oscSquare, 0, oscMixer, 1);
+AudioConnection          patchCord33(oscMixer , 0, vcf1    , 0);
 AudioConnection          patchCord4 (vcfEnv   , 0, vcfMixer, 0);
 AudioConnection          patchCord5 (dc       , 0, accEnv  , 0);
 AudioConnection          patchCord6 (accEnv   , 0, vcfMixer, 1);
@@ -88,11 +92,10 @@ AudioConnection          patchCord11(dc       , 0, vcaEnv  , 0);
 AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
 AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
 AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
-AudioConnection          patchCord18(vca      , 0, volMixer, 0);
-AudioConnection          patchCord15(volMixer , 0, invMixer, 0);
-AudioConnection          patchCord19(volMixer , 0, dacs    , 0);
+AudioConnection          patchCord15(vca      , 0, invMixer, 0);
+AudioConnection          patchCord19(vca      , 0, dacs    , 0);
 AudioConnection          patchCord20(invMixer , 0, dacs    , 1);
-AudioConnection          patchCord16(volMixer , 0, usbOut  , 0);
+AudioConnection          patchCord16(vca      , 0, usbOut  , 0);
 AudioConnection          patchCord17(invMixer , 0, usbOut  , 1);
 
 // capacitive touch keys
@@ -122,6 +125,8 @@ void setup(void)
   dc.amplitude(1.0f);
   oscSaw.begin(WAVEFORM_SAWTOOTH);
   oscSaw.amplitude(1.0f);
+  oscSquare.begin(WAVEFORM_SQUARE);
+  oscSquare.amplitude(1.0f);  
   vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
   vcaEnv.attack(3.0f);
   // vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
@@ -162,7 +167,7 @@ float log_pot(float x)
 // get the frequency in Hz for given semitone.
 float note_to_frequency(int note,int octave)
 {
-  return 27.5f*exp2(note/12.0f+octave);
+  return 440.f*exp2(note/12.0f+octave-5);
 }
 
 
@@ -195,7 +200,6 @@ void loop()
 
   // read octave knob
   int octave=(digitalRead(12)<<3) + (digitalRead(11)<<2) + (digitalRead(10)<<1) + (digitalRead(9)<<0);
-  Serial.print("Octave: "); Serial.println(octave);
   
   // read all analog knobs
   int analogs_raw[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A5),analogRead(A6)};
@@ -204,9 +208,9 @@ void loop()
     float target=(analogs_raw[i]/1023.f)*(1.f+2.f*threshold)-threshold;
     if(abs(analogs[i]-target)>threshold)
       analogs[i]=max(0.f, min(1.f,analogs[i]*0.9f+target*0.1f));
-    Serial.print(analogs[i],3);Serial.print(" ");
+//    Serial.print(analogs[i],3);Serial.print(" ");
   }
-  Serial.println();
+//  Serial.println();
   // update capacitive keyboard buttons every tick for most accurate measurements
   for(int i=0; i<16; i++)
     capacities[i].update(8);
@@ -287,14 +291,14 @@ void loop()
     for(int i=0; i<16; i++)
     {
       float total=capacities[i].get();
-//      Serial.print(total); Serial.print(" ");
-      if(total>30.f) {
+      //Serial.print(total); Serial.print(" ");
+      if(abs(total)>25.f) {
         frequencies[step]=note_to_frequency(i,octave);
         accents[step]=digitals[0];
         slides [step]=digitals[1];
       }
     }
-//    Serial.println();
+    //Serial.println();
 
     // delete button, erase current note
     if(digitals[3]) {
@@ -308,7 +312,7 @@ void loop()
 
     // compute next cycle length
     // swing even / odd beat if needed.
-    cycle_length=base_cycle_length*(1.f-analogs[8]*((step%2==0) ? -0.5f : 0.5f));
+    cycle_length=base_cycle_length*(1.f-analogs[9]*((step%2==0) ? -0.5f : 0.5f));
 
     // trigger note
     if(frequencies[step] && !last_slide)
@@ -353,11 +357,12 @@ void loop()
   float filter_cutoff    =log_pot(analogs[2])*4096.0f;
   float filter_resonance =analogs[3]*4.0f;
   float filter_mod       =analogs[4]*2.0f;
-  float volume           =analogs[7];
+  float oscMix           =analogs[7];
 
   // update synthesis parameters.
   AudioNoInterrupts();
-  if(frequency) oscSaw.frequency(frequency);
+  if(frequency) oscSaw   .frequency(frequency);
+  if(frequency) oscSquare.frequency(frequency);
   vcfMixer.gain(0,filter_mod);
   vcfMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
   vcf1.octaveControl(7.f);
@@ -366,7 +371,8 @@ void loop()
   vcf2.octaveControl(7.f);
   vcf2.resonance(filter_resonance);
   vcf2.frequency(filter_cutoff);
-  volMixer.gain(0,volume);
+  oscMixer.gain(0,1.-oscMix);
+  oscMixer.gain(1,   oscMix);
   AudioInterrupts();
 
   // print CPU, memory usage and timing informations

@@ -52,7 +52,7 @@ public:
     if(baseline==-1.f)
       baseline=value;
     else
-      baseline=baseline*0.99f+value*0.01f;
+      baseline=baseline*0.998f+value*0.002f;
 
     return value-baseline;
   }
