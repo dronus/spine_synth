@@ -111,6 +111,11 @@ void setup(void)
   pinMode(13,OUTPUT);
   digitalWrite(13,HIGH);
 
+  pinMode(9,INPUT_PULLDOWN);
+  pinMode(10,INPUT_PULLDOWN);
+  pinMode(11,INPUT_PULLDOWN);
+  pinMode(12,INPUT_PULLDOWN);
+
   Serial.begin(9600);
 
   AudioMemory(64);
@@ -188,8 +193,12 @@ void loop()
     digitals_last[i]=digitals[i];
   }
 
+  // read octave knob
+  int octave=(digitalRead(12)<<3) + (digitalRead(11)<<2) + (digitalRead(10)<<1) + (digitalRead(9)<<0);
+  Serial.print("Octave: "); Serial.println(octave);
+  
   // read all analog knobs
-  int analogs_raw[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A6),analogRead(A7)};
+  int analogs_raw[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A5),analogRead(A6)};
   float threshold=1.f/1024.f;
   for(int i=2; i<10; i++){
     float target=(analogs_raw[i]/1023.f)*(1.f+2.f*threshold)-threshold;
@@ -274,8 +283,6 @@ void loop()
     step++;
     step=step % 16;
 
-    // read octave selection knob
-    int octave=analogs[9]*6;
     // read capacitive touch keyboard
     for(int i=0; i<16; i++)
     {
