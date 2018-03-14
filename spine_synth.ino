@@ -332,7 +332,7 @@ void loop()
     // set per-note synthesis parameters.
     AudioNoInterrupts();
     vcfEnv.decay(slides[step] ? 10000.f : decay);
-    vcaEnv.decay(slides[step] ? 10000.f : decay * 2.f);
+    vcaEnv.decay(slides[step] ? 10000.f : decay * 4.f);
     accEnv.attack(accent_slew*0.2f);  // accent slew tied to 'resonance' pot like TB-303 does.
     accEnv.decay (accent_slew);
     if(accents[step]) accEnv.pulse(accent);
