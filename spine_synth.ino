@@ -44,6 +44,7 @@
 // 17 : Accent momentary pushbutton to GND 
 // 18 : Accent LED and resistor to GND
 // 22 : Delete note momentary pushbutton to VCC
+// 21 : MIDI-in, via optocoupler from DIN socket
 // A5 : free
 // A6 : Swing pot to GND and VCC
 // A14: OSC Mix to GND and VCC
@@ -59,7 +60,7 @@
 #include <math.h> 
 #include "AudioEffectIntegrator.h"
 #include "Capacity.h"
-
+#include <MIDI.h>
 
 // configure Teensy Audio library node network
 AudioSynthWaveformDc     dc;
@@ -97,6 +98,9 @@ AudioConnection          patchCord19(vca      , 0, dacs    , 0);
 AudioConnection          patchCord20(invMixer , 0, dacs    , 1);
 AudioConnection          patchCord16(vca      , 0, usbOut  , 0);
 AudioConnection          patchCord17(invMixer , 0, usbOut  , 1);
+
+// MIDI interface
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
 
 // capacitive touch keys
 Capacity capacities[16];
@@ -143,6 +147,10 @@ void setup(void)
     capacities[i]=Capacity(0,i+1);    // pins 1 - 8
   for(int i=0; i<8; i++)
     capacities[i+8]=Capacity(0,31-i); // pins 24 - 31 in reverse order
+
+  Serial1.setRX(21); // MIDI in
+  MIDI.begin(MIDI_CHANNEL_OMNI);
+  pinMode(1,INPUT); // reclaim touch input on pin 1 from MIDI (we only use MIDI-in on pin 21)
 }
  
 long last_time;
@@ -233,11 +241,17 @@ void loop()
   int trigger=false;
 
   // do MIDI events
-  while(usbMIDI.read()){
-    int midiEvent=usbMIDI.getType();
-    int midiData1=usbMIDI.getData1();
-    int midiData2=usbMIDI.getData2();
-    //  Serial.print("MIDI ");Serial.print(midiEvent); Serial.print(" "); Serial.print(midiData1); Serial.print(" "); Serial.print(midiData2); Serial.println();
+  while(true){
+    int incoming=0;
+    if     (usbMIDI.read()) incoming=1;
+    else if(MIDI   .read()) incoming=2;
+    else break;
+
+    int midiEvent=incoming==1 ? usbMIDI.getType() : MIDI.getType();
+    int midiData1=incoming==1 ? usbMIDI.getData1(): MIDI.getData1();
+    int midiData2=incoming==1 ? usbMIDI.getData2(): MIDI.getData2();
+    
+    Serial.print("MIDI ");Serial.print(incoming); Serial.print(" "); Serial.print(midiEvent); Serial.print(" "); Serial.print(midiData1); Serial.print(" "); Serial.print(midiData2); Serial.println();
 
     // handle incoming MIDI notes, priority on bright ones
     // TODO check how other monophonic instruments handle MIDI
