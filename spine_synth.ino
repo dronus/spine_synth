@@ -292,7 +292,7 @@ void loop()
     {
       float total=capacities[i].get();
       //Serial.print(total); Serial.print(" ");
-      if(abs(total)>25.f) {
+      if(abs(total)>100.f) {
         frequencies[step]=note_to_frequency(i,octave);
         accents[step]=digitals[0];
         slides [step]=digitals[1];

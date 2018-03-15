@@ -10,6 +10,8 @@
 
 #include "CapacitiveSensor.h"
 
+float dbaseline_k=0.1, dbaseline_limit=1.;
+
 class Capacity
 {
 public:
@@ -23,37 +25,39 @@ public:
     pinMode(sendPin,OUTPUT);
     digitalWrite(sendPin,LOW);
     pinMode(receivePin,INPUT);
-    digitalWrite(receivePin,LOW);
+    //digitalWrite(receivePin,LOW);
   }
   void update(int samples)
   {
 	
     long timeout=1024*samples;
-    long value=0;
+    long value_sum=0;
+
+    DIRECT_WRITE_HIGH(sReg, sBit);
+
     for(int i=0; i<samples; i++)
     {
-      noInterrupts();
-      DIRECT_MODE_OUTPUT(rReg, rBit);
+      noInterrupts();      
       DIRECT_MODE_INPUT(rReg, rBit);
-	    DIRECT_WRITE_HIGH(sReg, sBit);
-	    while(!DIRECT_READ(rReg, rBit) && (value < timeout) ) value++;
-	    DIRECT_WRITE_LOW(sReg, sBit);
+	    while(!DIRECT_READ(rReg, rBit) && (value_sum < timeout) ) value_sum++;
+      DIRECT_MODE_OUTPUT(rReg, rBit);
+      DIRECT_WRITE_LOW(rReg, rBit);
       interrupts();
     }
-    value_accum  +=value;
-    samples_accum+=samples;
 
-  }
-  float get()
-  {
-    float value=value_accum/(float)samples_accum;
-    value_accum=samples_accum=0;
-    
+    value=value_sum/(float)samples;
+            
     if(baseline==-1.f)
       baseline=value;
-    else
-      baseline=baseline*0.998f+value*0.002f;
+    else{
+      float db=value-baseline;
+      db=min(dbaseline_limit,max(-dbaseline_limit,db));
+      baseline+=db*dbaseline_k;
+    }
+  }
 
+  float get()
+  {
     return value-baseline;
   }
 private:
@@ -62,5 +66,6 @@ private:
 	IO_REG_TYPE rBit;
 	volatile IO_REG_TYPE * rReg;
   float baseline=-1.f;
-  long value_accum=0,samples_accum=0;
+  // long value_accum=0,samples_accum=0;
+  float value=0.f;
 };
