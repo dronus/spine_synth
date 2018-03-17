@@ -133,9 +133,9 @@ void setup(void)
   oscSaw.amplitude(1.0f);
   oscSquare.begin(WAVEFORM_SQUARE);
   oscSquare.amplitude(1.0f);  
-  vcfEnv.attack(6.0f); // attack as by TB-303, decay is variable
-  vcaEnv.attack(6.0f);
-  // vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
+  vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
+  vcaEnv.attack(3.0f);
+  vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
   // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
   vcfMixer.gain(0,1.f);
   vcfMixer.gain(1,1.f);
@@ -344,13 +344,15 @@ void loop()
   if(trigger){
     // compute per-note synthesis parameters. Further parameters are updated later per tick.
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
-    float decay=accents[step] ? analogs[8]*8.f*base_cycle_length : analogs[5]*8.f*base_cycle_length;
+//    float decay=accents[step] ? analogs[8]*8.f*base_cycle_length : analogs[5]*8.f*base_cycle_length;
+    float decay=accents[step] ? analogs[8]*3000.f : analogs[5]*3000.f;
     float accent=analogs[6];
-    float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]);
+//    float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]);
+    float accent_slew=200.f * (1.f+analogs[3]);
     // set per-note synthesis parameters.
     AudioNoInterrupts();
     vcfEnv.decay(slides[step] ? 10000.f : decay);
-    vcaEnv.decay(slides[step] ? 10000.f : decay * 4.f);
+    // vcaEnv.decay(slides[step] ? 10000.f : decay * 4.f);
     accEnv.attack(accent_slew*0.2f);  // accent slew tied to 'resonance' pot like TB-303 does.
     accEnv.decay (accent_slew);
     if(accents[step]) accEnv.pulse(accent);
