@@ -75,6 +75,7 @@ AudioFilterStateVariable vcf2;
 AudioEffectIntegrator    vcaEnv;
 AudioMixer4              vcaMixer;
 AudioEffectMultiply      vca;
+AudioFilterStateVariable vcaFilter;
 AudioMixer4              invMixer;
 AudioOutputAnalogStereo  dacs;
 AudioOutputUSB           usbOut;
@@ -93,10 +94,11 @@ AudioConnection          patchCord11(dc       , 0, vcaEnv  , 0);
 AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
 AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
 AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
-AudioConnection          patchCord15(vca      , 0, invMixer, 0);
-AudioConnection          patchCord19(vca      , 0, dacs    , 0);
+AudioConnection          patchCord21(vca      , 0, vcaFilter,0);
+AudioConnection          patchCord15(vcaFilter, 0, invMixer, 0);
+AudioConnection          patchCord19(vcaFilter, 0, dacs    , 0);
 AudioConnection          patchCord20(invMixer , 0, dacs    , 1);
-AudioConnection          patchCord16(vca      , 0, usbOut  , 0);
+AudioConnection          patchCord16(vcaFilter, 0, usbOut  , 0);
 AudioConnection          patchCord17(invMixer , 0, usbOut  , 1);
 
 // MIDI interface
@@ -131,14 +133,15 @@ void setup(void)
   oscSaw.amplitude(1.0f);
   oscSquare.begin(WAVEFORM_SQUARE);
   oscSquare.amplitude(1.0f);  
-  vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
-  vcaEnv.attack(3.0f);
+  vcfEnv.attack(6.0f); // attack as by TB-303, decay is variable
+  vcaEnv.attack(6.0f);
   // vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
   // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
   vcfMixer.gain(0,1.f);
   vcfMixer.gain(1,1.f);
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
+  vcaFilter.frequency(5000.f);
   invMixer.gain(0,-1.f);
   dacs.analogReference(INTERNAL);
   Serial.println("spine_synth running.");
@@ -149,7 +152,8 @@ void setup(void)
     capacities[i+8]=Capacity(0,31-i); // pins 24 - 31 in reverse order
 
   Serial1.setRX(21); // MIDI in
-  MIDI.begin(MIDI_CHANNEL_OMNI);
+//  MIDI.begin(MIDI_CHANNEL_OMNI);
+  MIDI.begin(1);
   pinMode(1,INPUT); // reclaim touch input on pin 1 from MIDI (we only use MIDI-in on pin 21)
 }
  
@@ -178,7 +182,7 @@ float note_to_frequency(int note,int octave)
   return 440.f*exp2(note/12.0f+octave-5);
 }
 
-
+bool run_sequencer=true;
 int midi_note_on=-1;
 int midi_clock_cycle=0;
 int midi_clock_last=0;
@@ -266,7 +270,7 @@ void loop()
       midi_note_on=midiData1;
     }else if(midiEvent==usbMIDI.NoteOff && midiData1==midi_note_on)
       midi_note_on=-1;
-    else if(midiEvent==usbMIDI.Clock){
+    else if(midiEvent==usbMIDI.Clock && cycle_length>0){
       if(midi_clock_cycle%6==0)
       {
         step=(midi_clock_cycle/6+15)%16;
@@ -275,11 +279,11 @@ void loop()
       }
       midi_clock_cycle++;
     }else if(midiEvent==usbMIDI.Start){
-      cycle=base_cycle_length;
+      cycle=cycle_length=base_cycle_length;
       midi_clock_cycle=0;
     }else if(midiEvent==usbMIDI.Stop){
       midi_clock_cycle=0;
-      cycle_length=0;
+      cycle_length=0;    
     }else if(midiEvent==usbMIDI.SongPosition){
       int pos=midiData1 + (midiData2<<7);
       midi_clock_cycle=pos;
@@ -340,7 +344,7 @@ void loop()
   if(trigger){
     // compute per-note synthesis parameters. Further parameters are updated later per tick.
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
-    float decay=accents[step] ? base_cycle_length * 1.6f : analogs[5]*8.f*base_cycle_length;
+    float decay=accents[step] ? analogs[8]*8.f*base_cycle_length : analogs[5]*8.f*base_cycle_length;
     float accent=analogs[6];
     float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]);
     // set per-note synthesis parameters.
