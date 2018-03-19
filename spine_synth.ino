@@ -45,14 +45,14 @@
 // 18 : Accent LED and resistor to GND
 // 22 : Delete note momentary pushbutton to VCC
 // 21 : MIDI-in, via optocoupler from DIN socket
-// A5 : free
-// A6 : Swing pot to GND and VCC
-// A14: OSC Mix to GND and VCC
-// A15: ACC Mod pot to GND and VCC
-// A16: ENV Decay pot to GND and VCC
-// A17: VCF Env Mod pot to GND and VCC
-// A18: VCF Resonance pot to GND and VCC
-// A19: VCF Cutoff pot to GND and VCC
+// A19: OSC MIX to GND and VCC
+// A18: CUTOFF FREQ pot to GND and VCC
+// A17: RESONANCE pot to GND and VCC
+// A16: ENV MOD pot to GND and VCC
+// A15: DECAY pot to GND and VCC
+// A14: ACCENT pot to GND and VCC
+// A5 : ACCENT DECAY pot to GND and VCC
+// A6 : SWING% pot to GND and VCC
 // A21: Audio out left , over 220 ohms, volume pot left, volume pot slider, 100uF  to jack
 // A22: Audio out right, over 220 ohms, volume pot right, 100uF to jack
 
@@ -186,7 +186,7 @@ bool run_sequencer=true;
 int midi_note_on=-1;
 int midi_clock_cycle=0;
 int midi_clock_last=0;
-float analogs[10];
+float analogs[8];
 void loop()
 {
   long time;
@@ -214,9 +214,9 @@ void loop()
   int octave=(digitalRead(12)<<3) + (digitalRead(11)<<2) + (digitalRead(10)<<1) + (digitalRead(9)<<0);
   
   // read all analog knobs
-  int analogs_raw[]={0,0,analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A5),analogRead(A6)};
+  int analogs_raw[]={analogRead(A19),analogRead(A18),analogRead(A17),analogRead(A16),analogRead(A15),analogRead(A14),analogRead(A5),analogRead(A6)};
   float threshold=1.f/1024.f;
-  for(int i=2; i<10; i++){
+  for(int i=0; i<8; i++){
     float target=(analogs_raw[i]/1023.f)*(1.f+2.f*threshold)-threshold;
     if(abs(analogs[i]-target)>threshold)
       analogs[i]=max(0.f, min(1.f,analogs[i]*0.9f+target*0.1f));
@@ -330,7 +330,7 @@ void loop()
 
     // compute next cycle length
     // swing even / odd beat if needed.
-    cycle_length=base_cycle_length*(1.f-analogs[9]*((step%2==0) ? -0.5f : 0.5f));
+    cycle_length=base_cycle_length*(1.f-analogs[7]*((step%2==0) ? -0.5f : 0.5f));
 
     // trigger note
     if(frequencies[step] && !last_slide)
@@ -345,10 +345,10 @@ void loop()
     // compute per-note synthesis parameters. Further parameters are updated later per tick.
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
 //    float decay=accents[step] ? analogs[8]*8.f*base_cycle_length : analogs[5]*8.f*base_cycle_length;
-    float decay=accents[step] ? analogs[8]*3000.f : analogs[5]*3000.f;
-    float accent=analogs[6];
+    float decay=accents[step] ? analogs[6]*3000.f : analogs[4]*3000.f;
+    float accent=analogs[5];
 //    float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]);
-    float accent_slew=200.f * (1.f+analogs[3]);
+    float accent_slew=200.f * (1.f+analogs[2]);
     // set per-note synthesis parameters.
     AudioNoInterrupts();
     vcfEnv.decay(slides[step] ? 10000.f : decay);
@@ -374,10 +374,10 @@ void loop()
     float t=((float)cycle)/base_cycle_length;
     frequency=frequency*(1.f-t)+next_f*t;
   }
-  float filter_cutoff    =log_pot(analogs[2])*4096.0f;
-  float filter_resonance =analogs[3]*4.0f;
-  float filter_mod       =analogs[4]*2.0f;
-  float oscMix           =analogs[7];
+  float filter_cutoff    =log_pot(analogs[1])*4096.0f;
+  float filter_resonance =analogs[2]*4.0f;
+  float filter_mod       =analogs[3]*2.0f;
+  float oscMix           =analogs[0];
 
   // update synthesis parameters.
   AudioNoInterrupts();
