@@ -83,9 +83,10 @@ AudioConnection          patchCord0 (dc       , 0, vcfEnv  , 0);
 AudioConnection          patchCord31(oscSaw   , 0, oscMixer, 0);
 AudioConnection          patchCord32(oscSquare, 0, oscMixer, 1);
 AudioConnection          patchCord33(oscMixer , 0, vcf1    , 0);
-AudioConnection          patchCord4 (vcfEnv   , 0, vcfMixer, 0);
 AudioConnection          patchCord5 (dc       , 0, accEnv  , 0);
-AudioConnection          patchCord6 (accEnv   , 0, vcfMixer, 1);
+AudioConnection          patchCord41(dc       , 0, vcfMixer, 0);
+AudioConnection          patchCord42(vcfEnv   , 0, vcfMixer, 1);
+AudioConnection          patchCord6 (accEnv   , 0, vcfMixer, 2);
 AudioConnection          patchCord7 (vcfMixer , 0, vcf1    , 1);
 AudioConnection          patchCord8 (vcf1     , 0, vcf2    , 0);
 AudioConnection          patchCord9 (vcfMixer , 0, vcf2    , 1);
@@ -137,8 +138,6 @@ void setup(void)
   vcaEnv.attack(3.0f);
   vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
   // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
-  vcfMixer.gain(0,1.f);
-  vcfMixer.gain(1,1.f);
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
   vcaFilter.frequency(5000.f);
@@ -376,15 +375,16 @@ void loop()
   }
   float filter_cutoff    =log_pot(analogs[1])*4096.0f;
   float filter_resonance =analogs[2]*4.0f;
-  float filter_mod       =analogs[3]*2.0f;
+  float filter_mod       =analogs[3]*1.0f;
   float oscMix           =analogs[0];
 
   // update synthesis parameters.
   AudioNoInterrupts();
   if(frequency) oscSaw   .frequency(frequency);
   if(frequency) oscSquare.frequency(frequency);
-  vcfMixer.gain(0,filter_mod);
-  vcfMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
+  vcfMixer.gain(0,-filter_mod); // negative bias, filter_mod/2 would give better symmetric modulation response, but accent modulation may clip then.
+  vcfMixer.gain(1,filter_mod);
+  vcfMixer.gain(2,1.f); // accent is always mixed in, it is just not pulsed any time. 
   vcf1.octaveControl(7.f);
   vcf1.resonance(filter_resonance);
   vcf1.frequency(filter_cutoff);
