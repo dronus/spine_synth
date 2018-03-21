@@ -164,9 +164,10 @@ int cycle=0;
 int base_cycle_length=125;
 int cycle_length=base_cycle_length;
 int step =0;
-float frequencies[16];
-bool accents[16];
-bool slides[16];
+#define STEPS 32
+float frequencies[STEPS];
+bool accents[STEPS];
+bool slides[STEPS];
 long taps[4];
 
 // emulate logarithmic potentiometer on linear one
@@ -272,7 +273,7 @@ void loop()
     else if(midiEvent==usbMIDI.Clock && cycle_length>0){
       if(midi_clock_cycle%6==0)
       {
-        step=(midi_clock_cycle/6+15)%16;
+        step=(midi_clock_cycle/6+(STEPS-1))%STEPS;
         cycle=base_cycle_length=cycle_length=(time-midi_clock_last)*1.2f;
         midi_clock_last=time;
       }
@@ -302,7 +303,7 @@ void loop()
 
     // Advance step to play next note by sequencer.
     step++;
-    step=step % 16;
+    step=step % STEPS;
 
     // read capacitive touch keyboard
     for(int i=0; i<16; i++)
@@ -369,7 +370,7 @@ void loop()
   if(slides[step]){
     // compute frequency by slide.
     // TODO we should use a signal-controlled oscilator to handle this updates in Audio engine.
-    float next_f=frequencies[(step+1)%16];
+    float next_f=frequencies[(step+1)%STEPS];
     float t=((float)cycle)/base_cycle_length;
     frequency=frequency*(1.f-t)+next_f*t;
   }
