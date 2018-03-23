@@ -135,35 +135,36 @@ void setup(void)
   oscSquare.begin(WAVEFORM_SQUARE);
   oscSquare.amplitude(1.0f);  
   vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
+  vcfMixer.gain(2,1.f); // accent is always mixed in, it is just not pulsed any time. 
+  vcf1.octaveControl(7.f);
+  vcf2.octaveControl(7.f);
   vcaEnv.attack(3.0f);
   vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
-  // vcaEnv.decay(16.0f); // "TB-303 has 8ms full on and 8ms linear decay" who said this?
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
   vcaFilter.frequency(5000.f);
   invMixer.gain(0,-1.f);
   dacs.analogReference(INTERNAL);
-  Serial.println("spine_synth running.");
 
   for(int i=0; i<8; i++)
     capacities[i]=Capacity(0,i+1);    // pins 1 - 8
   for(int i=0; i<8; i++)
     capacities[i+8]=Capacity(0,31-i); // pins 24 - 31 in reverse order
 
-  Serial1.setRX(21); // MIDI in
-//  MIDI.begin(MIDI_CHANNEL_OMNI);
-  MIDI.begin(1);
+  Serial1.setRX(21); // MIDI in pin 21
+  MIDI.begin(1); // listening on channel 1
   pinMode(1,INPUT); // reclaim touch input on pin 1 from MIDI (we only use MIDI-in on pin 21)
 
   // settle capacitive baseline adjustment
   for(int i=0; i<16; i++)
-    capacities[i].update(32);
+    capacities[i].get(32);
+
+  Serial.println("spine_synth running.");
 }
  
 long last_time;
 bool digitals_last[5];
 bool digitals_click[5];
-float last_volume=0.;
 int cycle=0;
 int base_cycle_length=125;
 int cycle_length=base_cycle_length;
@@ -174,19 +175,12 @@ bool accents[STEPS];
 bool slides[STEPS];
 long taps[4];
 
-// emulate logarithmic potentiometer on linear one
-float log_pot(float x)
-{
-  return 1.f-log2(1024.f-x*1023.f)/10.f;
-}
-
 // get the frequency in Hz for given semitone.
 float note_to_frequency(int note,int octave)
 {
-  return 440.f*exp2(note/12.0f+octave-5);
+  return 440.f*exp2f(note/12.0f+octave-5);
 }
 
-bool run_sequencer=true;
 int midi_note_on=-1;
 int midi_clock_cycle=0;
 int midi_clock_last=0;
@@ -197,7 +191,7 @@ void loop()
   long dt=0;
   // keep almost constant loop timing
   // and update cycle time (time into current sequence step)
-  while(dt<5)
+//  while(dt<5)
   {
     time=millis();
     dt=time-last_time;
@@ -222,6 +216,7 @@ void loop()
   float threshold=1.f/1024.f;
   for(int i=0; i<8; i++){
     float target=(analogs_raw[i]/1023.f)*(1.f+2.f*threshold)-threshold;
+    // filter a little bit to get a dead zone steady state
     if(abs(analogs[i]-target)>threshold)
       analogs[i]=max(0.f, min(1.f,analogs[i]*0.9f+target*0.1f));
 //    Serial.print(analogs[i],3);Serial.print(" ");
@@ -269,7 +264,7 @@ void loop()
     int midiData1=incoming==1 ? usbMIDI.getData1(): MIDI.getData1();
     int midiData2=incoming==1 ? usbMIDI.getData2(): MIDI.getData2();
     
-    Serial.print("MIDI ");Serial.print(incoming); Serial.print(" "); Serial.print(midiEvent); Serial.print(" "); Serial.print(midiData1); Serial.print(" "); Serial.print(midiData2); Serial.println();
+    // Serial.print("MIDI ");Serial.print(incoming); Serial.print(" "); Serial.print(midiEvent); Serial.print(" "); Serial.print(midiData1); Serial.print(" "); Serial.print(midiData2); Serial.println();
 
     // handle incoming MIDI notes, priority on bright ones
     // TODO check how other monophonic instruments handle MIDI
@@ -345,15 +340,12 @@ void loop()
   if(trigger){
     // compute per-note synthesis parameters. Further parameters are updated later per tick.
     // for accented notes, TB-303 decay would be 200ms. We tie that to our cycle, so adjust to 200ms for 120bpm.
-//    float decay=accents[step] ? analogs[8]*8.f*base_cycle_length : analogs[5]*8.f*base_cycle_length;
     float decay=accents[step] ? analogs[6]*3000.f : analogs[4]*3000.f;
     float accent=analogs[5];
-//    float accent_slew=base_cycle_length * 1.6f * (1.f+analogs[3]);
     float accent_slew=200.f * (1.f+analogs[2]);
     // set per-note synthesis parameters.
     AudioNoInterrupts();
     vcfEnv.decay(slides[step] ? 10000.f : decay);
-    // vcaEnv.decay(slides[step] ? 10000.f : decay * 4.f);
     accEnv.attack(accent_slew*0.2f);  // accent slew tied to 'resonance' pot like TB-303 does.
     accEnv.decay (accent_slew);
     if(accents[step]) accEnv.pulse(accent);
@@ -375,7 +367,7 @@ void loop()
     float t=((float)cycle)/base_cycle_length;
     frequency=frequency*(1.f-t)+next_f*t;
   }
-  float filter_cutoff    =log_pot(analogs[1])*4096.0f;
+  float filter_cutoff    =(1.f-log2f(1024.f-analogs[1]*1023.f)/10.f)*4096.0f; // emulate log pot
   float filter_resonance =analogs[2]*4.0f;
   float filter_mod       =analogs[3]*1.0f;
   float oscMix           =analogs[0];
@@ -386,11 +378,8 @@ void loop()
   if(frequency) oscSquare.frequency(frequency);
   vcfMixer.gain(0,-filter_mod); // negative bias, filter_mod/2 would give better symmetric modulation response, but accent modulation may clip then.
   vcfMixer.gain(1,filter_mod);
-  vcfMixer.gain(2,1.f); // accent is always mixed in, it is just not pulsed any time. 
-  vcf1.octaveControl(7.f);
   vcf1.resonance(filter_resonance);
   vcf1.frequency(filter_cutoff);
-  vcf2.octaveControl(7.f);
   vcf2.resonance(filter_resonance);
   vcf2.frequency(filter_cutoff);
   oscMixer.gain(0,1.-oscMix);
