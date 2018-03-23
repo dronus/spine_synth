@@ -61,6 +61,7 @@
 #include "AudioEffectIntegrator.h"
 #include "Capacity.h"
 #include <MIDI.h>
+#include <OpenAudio_ArduinoLibrary.h>
 
 // configure Teensy Audio library node network
 AudioSynthWaveformDc     dc;
@@ -76,6 +77,9 @@ AudioEffectIntegrator    vcaEnv;
 AudioMixer4              vcaMixer;
 AudioEffectMultiply      vca;
 AudioFilterStateVariable vcaFilter;
+AudioConvert_I16toF32    int2Float;
+AudioEffectCompressor_F32 comp;
+AudioConvert_F32toI16    float2Int;
 AudioMixer4              invMixer;
 AudioOutputAnalogStereo  dacs;
 AudioOutputUSB           usbOut;
@@ -96,8 +100,11 @@ AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
 AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
 AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
 AudioConnection          patchCord21(vca      , 0, vcaFilter,0);
-AudioConnection          patchCord15(vcaFilter, 0, invMixer, 0);
-AudioConnection          patchCord19(vcaFilter, 0, dacs    , 0);
+AudioConnection          patchCord22(vcaFilter, 0, int2Float,0);
+AudioConnection_F32      patchCord23(int2Float, 0, comp    , 0);
+AudioConnection_F32      patchCord24(comp     , 0, float2Int,0);
+AudioConnection          patchCord15(float2Int, 0, invMixer, 0);
+AudioConnection          patchCord19(float2Int, 0, dacs    , 0);
 AudioConnection          patchCord20(invMixer , 0, dacs    , 1);
 AudioConnection          patchCord16(vcaFilter, 0, usbOut  , 0);
 AudioConnection          patchCord17(invMixer , 0, usbOut  , 1);
@@ -143,6 +150,16 @@ void setup(void)
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
   vcaFilter.frequency(5000.f);
+
+  AudioMemory_F32(16);
+  comp.enableHPFilter(false);
+  comp.setThresh_dBFS(-50.f);
+  comp.setCompressionRatio(1.f);
+  float fs_Hz = AUDIO_SAMPLE_RATE;
+  comp.setAttack_sec (0.1f, fs_Hz);
+  comp.setRelease_sec(1.f, fs_Hz);
+  comp.setPreGain_dB(0.f);
+
   invMixer.gain(0,-1.f);
   dacs.analogReference(INTERNAL);
 
