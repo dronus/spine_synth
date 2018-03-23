@@ -154,6 +154,10 @@ void setup(void)
 //  MIDI.begin(MIDI_CHANNEL_OMNI);
   MIDI.begin(1);
   pinMode(1,INPUT); // reclaim touch input on pin 1 from MIDI (we only use MIDI-in on pin 21)
+
+  // settle capacitive baseline adjustment
+  for(int i=0; i<16; i++)
+    capacities[i].update(32);
 }
  
 long last_time;
@@ -225,7 +229,7 @@ void loop()
 //  Serial.println();
   // update capacitive keyboard buttons every tick for most accurate measurements
   for(int i=0; i<16; i++)
-    capacities[i].update(8);
+    capacities[i].update(1);
 
   // read tempo tap button and adapt tempo after four clicks
   if(digitals_click[2])
@@ -242,8 +246,21 @@ void loop()
     midi_note_on=-1;
   }
 
-  int trigger=false;
+  // read capacitive touch keyboard
+  for(int i=0; i<16; i++)
+  {
+    float total=capacities[i].get();
+//    Serial.print(total); Serial.print(" ");
+    if(abs(total)>100.f) {
+      int next_step=(step+1)%STEPS;
+      frequencies[next_step]=note_to_frequency(i,octave);
+      accents[next_step]=digitals[0];
+      slides [next_step]=digitals[1];
+    }
+  }
+//  Serial.println();
 
+  int trigger=false;
   // do MIDI events
   while(true){
     int incoming=0;
@@ -304,19 +321,6 @@ void loop()
     // Advance step to play next note by sequencer.
     step++;
     step=step % STEPS;
-
-    // read capacitive touch keyboard
-    for(int i=0; i<16; i++)
-    {
-      float total=capacities[i].get();
-      //Serial.print(total); Serial.print(" ");
-      if(abs(total)>100.f) {
-        frequencies[step]=note_to_frequency(i,octave);
-        accents[step]=digitals[0];
-        slides [step]=digitals[1];
-      }
-    }
-    //Serial.println();
 
     // delete button, erase current note
     if(digitals[3]) {
@@ -407,7 +411,7 @@ void loop()
     Serial.print(" (");    
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
-    Serial.println(dt);
   */
-
+   Serial.println(dt);
+ 
 }
