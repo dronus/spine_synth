@@ -227,9 +227,6 @@ void loop()
 //    Serial.print(analogs[i],3);Serial.print(" ");
   }
 //  Serial.println();
-  // update capacitive keyboard buttons every tick for most accurate measurements
-  for(int i=0; i<16; i++)
-    capacities[i].update(1);
 
   // read tempo tap button and adapt tempo after four clicks
   if(digitals_click[2])
@@ -249,7 +246,7 @@ void loop()
   // read capacitive touch keyboard
   for(int i=0; i<16; i++)
   {
-    float total=capacities[i].get();
+    float total=capacities[i].get(2);
 //    Serial.print(total); Serial.print(" ");
     if(abs(total)>100.f) {
       int next_step=(step+1)%STEPS;

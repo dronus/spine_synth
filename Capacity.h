@@ -27,7 +27,8 @@ public:
     pinMode(receivePin,INPUT);
     //digitalWrite(receivePin,LOW);
   }
-  void update(int samples)
+
+  float get(int samples)
   {
 	
     long timeout=1024*samples;
@@ -54,10 +55,7 @@ public:
       db=min(dbaseline_limit,max(-dbaseline_limit,db));
       baseline+=db*dbaseline_k;
     }
-  }
 
-  float get()
-  {
     return value-baseline;
   }
 private:
