@@ -16,14 +16,21 @@
 // The incoming audio is just attenuated according to the decay bucket energy.
 //
 
-class AudioEffectIntegrator : public AudioStream
+#include "AudioStream_F32.h"
+
+__inline__ float clamp(float x)
+{
+  return min(1.f,max(-1.f,x));
+}
+
+class AudioEffectIntegrator : public AudioStream_F32
 {
 public:
-	AudioEffectIntegrator() : AudioStream(1, inputQueueArray) {
+	AudioEffectIntegrator() : AudioStream_F32(1, inputQueueArray) {
 		attack(0.01f);
 		decay(1.f);
 	}
-	using AudioStream::release;
+	using AudioStream_F32::release;
   void noteOn(float velocity)
   {
   	__disable_irq();
@@ -43,7 +50,7 @@ public:
     if(milliseconds<=0.f) 
       attack_valve=0.f;
     else    
-  		attack_valve = pow(0.1,1.f/(AUDIO_SAMPLE_RATE_EXACT*0.001f*milliseconds));
+  		attack_valve = powf(0.1,1.f/(AUDIO_SAMPLE_RATE_EXACT*0.001f*milliseconds));
     __enable_irq();
 	}
   // set decay time (time until 9/10 of energy is drained)
@@ -52,16 +59,16 @@ public:
     if(milliseconds<=0.f)
       decay_valve=0.f;
     else
-  		decay_valve = pow(0.1,1.f/(AUDIO_SAMPLE_RATE_EXACT*0.001f*milliseconds));
+  		decay_valve = powf(0.1,1.f/(AUDIO_SAMPLE_RATE_EXACT*0.001f*milliseconds));
     __enable_irq();
 	}
 	virtual void update(void)	{
-	  int16_t *p, *end;
+	  float *p, *end;
 
-	  audio_block_t* block = receiveWritable();
+	  audio_block_f32_t* block = receiveWritable_f32();
 	  if (!block) return;
 
-	  p = (int16_t*)(block->data);
+	  p = block->data;
 	  end = p + AUDIO_BLOCK_SAMPLES;
 
     float attack_flow=1.-attack_valve;
@@ -70,13 +77,13 @@ public:
       float de=energy_in*attack_flow;      
       energy    = energy*decay_valve + de;
       energy_in = energy_in          - de;
-      (*p++)*=energy;
+      (*p++)*=clamp(energy);
 	  }
-	  transmit(block);
-	  release(block);
+	  AudioStream_F32::transmit(block);
+	  AudioStream_F32::release(block);
   }
 private:
-	audio_block_t *inputQueueArray[1];
+	audio_block_f32_t *inputQueueArray[1];
   float energy_in=0.f,energy=0.f;
   float attack_valve, decay_valve;
 };

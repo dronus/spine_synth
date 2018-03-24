@@ -65,49 +65,50 @@
 #include <OpenAudio_ArduinoLibrary.h>
 
 // configure Teensy Audio library node network
-AudioSynthWaveformDc     dc;
+AudioSynthWaveformDc     dcInt;
+AudioConvert_I16toF32    dc;
 AudioEffectIntegrator    vcfEnv;
 AudioEffectIntegrator    accEnv;
-AudioMixer4              vcfMixer;
-AudioSynthWaveform       oscSaw;
-AudioSynthWaveform       oscSquare;
-AudioMixer4              oscMixer;
-AudioFilterStateVariable vcf1;
-AudioFilterStateVariable vcf2;
+AudioMixer4_F32              vcfMixer;
+AudioSynthWaveform_F32       oscSaw;
+AudioSynthWaveform_F32       oscSquare;
+AudioMixer4_F32              oscMixer;
+AudioFilterStateVariableF32 vcf1;
+AudioFilterStateVariableF32 vcf2;
 AudioEffectIntegrator    vcaEnv;
-AudioMixer4              vcaMixer;
-AudioEffectMultiply      vca;
+AudioMixer4_F32              vcaMixer;
+AudioMultiply_F32      vca;
 AudioFilterStateVariableF32 vcaFilter;
-AudioConvert_I16toF32    int2Float;
-AudioEffectCompressor_F32 comp;
+//AudioEffectCompressor_F32 comp;
 AudioConvert_F32toI16    float2Int;
 AudioMixer4              invMixer;
 AudioOutputAnalogStereo  dacs;
 AudioOutputUSB           usbOut;
-AudioConnection          patchCord0 (dc       , 0, vcfEnv  , 0);
-AudioConnection          patchCord31(oscSaw   , 0, oscMixer, 0);
-AudioConnection          patchCord32(oscSquare, 0, oscMixer, 1);
-AudioConnection          patchCord33(oscMixer , 0, vcf1    , 0);
-AudioConnection          patchCord5 (dc       , 0, accEnv  , 0);
-AudioConnection          patchCord41(dc       , 0, vcfMixer, 0);
-AudioConnection          patchCord42(vcfEnv   , 0, vcfMixer, 1);
-AudioConnection          patchCord6 (accEnv   , 0, vcfMixer, 2);
-AudioConnection          patchCord7 (vcfMixer , 0, vcf1    , 1);
-AudioConnection          patchCord8 (vcf1     , 0, vcf2    , 0);
-AudioConnection          patchCord9 (vcfMixer , 0, vcf2    , 1);
-AudioConnection          patchCord10(vcf2     , 0, vca     , 0);
-AudioConnection          patchCord11(dc       , 0, vcaEnv  , 0);
-AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
-AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
-AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
-AudioConnection          patchCord22(vca, 0, int2Float,0);
-AudioConnection_F32      patchCord23(int2Float, 0, vcaFilter    , 0);
-AudioConnection_F32          patchCord21(vcaFilter      , 0, comp,0);
-AudioConnection_F32      patchCord24(comp     , 0, float2Int,0);
+AudioConnection          patchCord0 (dcInt       , 0, dc   , 0);
+AudioConnection_F32      patchCord0f (dc      , 0, vcfEnv  , 0);
+AudioConnection_F32          patchCord31(oscSaw   , 0, oscMixer, 0);
+AudioConnection_F32          patchCord32(oscSquare, 0, oscMixer, 1);
+AudioConnection_F32          patchCord33(oscMixer , 0, vcf1    , 0);
+AudioConnection_F32          patchCord5 (dc       , 0, accEnv  , 0);
+AudioConnection_F32          patchCord41(dc       , 0, vcfMixer, 0);
+AudioConnection_F32          patchCord42(vcfEnv   , 0, vcfMixer, 1);
+AudioConnection_F32          patchCord6 (accEnv   , 0, vcfMixer, 2);
+AudioConnection_F32          patchCord7 (vcfMixer , 0, vcf1    , 1);
+AudioConnection_F32          patchCord8 (vcf1     , 0, vcf2    , 0);
+AudioConnection_F32          patchCord9 (vcfMixer , 0, vcf2    , 1);
+AudioConnection_F32          patchCord10(vcf2     , 0, vca     , 0);
+AudioConnection_F32          patchCord11(dc       , 0, vcaEnv  , 0);
+AudioConnection_F32          patchCord12(vcaEnv   , 0, vcaMixer, 0);
+AudioConnection_F32          patchCord13(accEnv   , 0, vcaMixer, 1);
+AudioConnection_F32          patchCord14(vcaMixer , 0, vca     , 1);
+AudioConnection_F32          patchCord22(vca, 0, vcaFilter,0);
+//AudioConnection_F32          patchCord21(vcaFilter      , 0, comp,0);
+//AudioConnection_F32      patchCord24(comp     , 0, float2Int,0);
+AudioConnection_F32      patchCord24(vcaFilter     , 0, float2Int,0);
 AudioConnection          patchCord15(float2Int, 0, invMixer, 0);
 AudioConnection          patchCord19(float2Int, 0, dacs    , 0);
 AudioConnection          patchCord20(invMixer , 0, dacs    , 1);
-AudioConnection          patchCord16(vcaFilter, 0, usbOut  , 0);
+AudioConnection          patchCord16(float2Int, 0, usbOut  , 0);
 AudioConnection          patchCord17(invMixer , 0, usbOut  , 1);
 
 // MIDI interface
@@ -136,8 +137,8 @@ void setup(void)
 
   Serial.begin(9600);
 
-  AudioMemory(64);
-  dc.amplitude(1.0f);
+  AudioMemory(32);
+  dcInt.amplitude(1.0f);
   oscSaw.begin(WAVEFORM_SAWTOOTH);
   oscSaw.amplitude(1.0f);
   oscSquare.begin(WAVEFORM_SQUARE);
@@ -152,15 +153,15 @@ void setup(void)
   vcaMixer.gain(1,0.5f);
   vcaFilter.frequency(5000.f);
 
-  AudioMemory_F32(16);
-  comp.enableHPFilter(false);
+  AudioMemory_F32(64);
+/*  comp.enableHPFilter(false);
   comp.setThresh_dBFS(-50.f);
-  comp.setCompressionRatio(1.f);
+  comp.setCompressionRatio(5.f);
   float fs_Hz = AUDIO_SAMPLE_RATE;
   comp.setAttack_sec (0.1f, fs_Hz);
   comp.setRelease_sec(1.f, fs_Hz);
   comp.setPreGain_dB(0.f);
-
+*/
   invMixer.gain(0,-1.f);
   dacs.analogReference(INTERNAL);
 

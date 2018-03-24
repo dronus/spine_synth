@@ -50,10 +50,10 @@ public:
 		setting_fmult = sinf(freq * (3.141592654/(AUDIO_SAMPLE_RATE_EXACT*2.0)));
 	}
 	void resonance(float q) {
-		if (q < 0.7) q = 0.7;
+		if (q < 0.5) q = 0.5;
 		else if (q > 5.0) q = 5.0;
 		// TODO: allow lower Q when frequency is lower
-		setting_damp = (1.0 / q) * 0.5f;
+		setting_damp = (1.0 / q);
 	}
 	void octaveControl(float n) {
 		// filter's corner frequency is Fcenter * 2^(control * N)

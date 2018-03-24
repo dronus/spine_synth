@@ -68,6 +68,11 @@ void AudioFilterStateVariable::update_fixed(const int16_t *in,
 }
 */
 
+__inline__ float clamp(float x)
+{
+  return min(1.f,max(-1.f,x));
+}
+
 void AudioFilterStateVariableF32::update_variable(const float *in,
 	const float *ctl, float *lp, float *bp, float *hp)
 {
@@ -83,30 +88,37 @@ void AudioFilterStateVariableF32::update_variable(const float *in,
 	inputprev = state_inputprev;
 	lowpass = state_lowpass;
 	bandpass = state_bandpass;
+  int i=0;
+	// compute fmult using control input, fcenter and octavemult
+  float fmult0=clamp(ctl ? exp2f(octavemult * ctl[0                    ])*fcenter : fcenter);
+  float fmult1=clamp(ctl ? exp2f(octavemult * ctl[AUDIO_BLOCK_SAMPLES-1])*fcenter : fcenter);
 	do {
-		// compute fmult using control input, fcenter and octavemult
-		control = ctl ? *ctl++ : 0.f;          // signal is always 15 fractional bits
-		control *= octavemult;     // octavemult range: 0 to 28671 (12 frac bits)
-    fmult=exp2f(control)*fcenter;
-
+    float t=((float)i++)/AUDIO_BLOCK_SAMPLES;
+    fmult=(1.f-t)*fmult0 + t*fmult1;
 		// now do the state variable filter as normal, using fmult
-		input = (*in++);
+		input = *in++;
 		lowpass = lowpass + fmult * bandpass;
-		highpass = ((input + inputprev)/2.f) - lowpass - (damp * bandpass);
+		highpass = (input + inputprev)/2.f - lowpass - damp * bandpass;
 		inputprev = input;
 		bandpass = bandpass + (fmult * highpass);
 		lowpasstmp = lowpass;
 		bandpasstmp = bandpass;
 		highpasstmp = highpass;
-		lowpass = lowpass + (fmult * bandpass);
-		highpass = input - lowpass - (damp * bandpass);
-		bandpass = bandpass + (fmult * highpass);
-		lowpasstmp = (lowpass+lowpasstmp)/2.f;
+		lowpass = lowpass + fmult * bandpass;
+		highpass = input - lowpass - damp * bandpass;
+		bandpass = bandpass + fmult * highpass;
+/*
+    lowpass=clamp(lowpass);
+    bandpass=clamp(bandpass);
+    highpass=clamp(highpass);
+*/
+		lowpasstmp =  (lowpass+lowpasstmp)  /2.f;
 		bandpasstmp = (bandpass+bandpasstmp)/2.f;
 		highpasstmp = (highpass+highpasstmp)/2.f;
-		*lp++ = lowpasstmp;
-		*bp++ = bandpasstmp;
-		*hp++ = highpasstmp;
+    
+		*lp++ = clamp(lowpasstmp);
+		*bp++ = clamp(bandpasstmp);
+		*hp++ = clamp(highpasstmp);
 	} while (in < end);
 	state_inputprev = inputprev;
 	state_lowpass = lowpass;
