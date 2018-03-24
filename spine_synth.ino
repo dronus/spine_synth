@@ -59,6 +59,7 @@
 #include <Audio.h>
 #include <math.h> 
 #include "AudioEffectIntegrator.h"
+#include "AudioFilterVariable.h"
 #include "Capacity.h"
 #include <MIDI.h>
 #include <OpenAudio_ArduinoLibrary.h>
@@ -76,7 +77,7 @@ AudioFilterStateVariable vcf2;
 AudioEffectIntegrator    vcaEnv;
 AudioMixer4              vcaMixer;
 AudioEffectMultiply      vca;
-AudioFilterStateVariable vcaFilter;
+AudioFilterStateVariableF32 vcaFilter;
 AudioConvert_I16toF32    int2Float;
 AudioEffectCompressor_F32 comp;
 AudioConvert_F32toI16    float2Int;
@@ -99,9 +100,9 @@ AudioConnection          patchCord11(dc       , 0, vcaEnv  , 0);
 AudioConnection          patchCord12(vcaEnv   , 0, vcaMixer, 0);
 AudioConnection          patchCord13(accEnv   , 0, vcaMixer, 1);
 AudioConnection          patchCord14(vcaMixer , 0, vca     , 1);
-AudioConnection          patchCord21(vca      , 0, vcaFilter,0);
-AudioConnection          patchCord22(vcaFilter, 0, int2Float,0);
-AudioConnection_F32      patchCord23(int2Float, 0, comp    , 0);
+AudioConnection          patchCord22(vca, 0, int2Float,0);
+AudioConnection_F32      patchCord23(int2Float, 0, vcaFilter    , 0);
+AudioConnection_F32          patchCord21(vcaFilter      , 0, comp,0);
 AudioConnection_F32      patchCord24(comp     , 0, float2Int,0);
 AudioConnection          patchCord15(float2Int, 0, invMixer, 0);
 AudioConnection          patchCord19(float2Int, 0, dacs    , 0);
@@ -404,7 +405,7 @@ void loop()
   AudioInterrupts();
 
   // print CPU, memory usage and timing informations
-  /*
+  
     Serial.print("Proc = ");
     Serial.print(AudioProcessorUsage());
     Serial.print(" (");    
@@ -414,7 +415,7 @@ void loop()
     Serial.print(" (");    
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
-  */
+  
    Serial.println(dt);
  
 }
