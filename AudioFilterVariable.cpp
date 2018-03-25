@@ -28,56 +28,17 @@
 #include <AudioStream_F32.h>
 
 #if defined(KINETISK)
-/*
-void AudioFilterStateVariable::update_fixed(const int16_t *in,
-	int16_t *lp, int16_t *bp, int16_t *hp)
-{
-	const int16_t *end = in + AUDIO_BLOCK_SAMPLES;
-	int32_t input, inputprev;
-	int32_t lowpass, bandpass, highpass;
-	int32_t lowpasstmp, bandpasstmp, highpasstmp;
-	int32_t fmult, damp;
-
-	fmult = setting_fmult;
-	damp = setting_damp;
-	inputprev = state_inputprev;
-	lowpass = state_lowpass;
-	bandpass = state_bandpass;
-	do {
-		input = (*in++) << 12;
-		lowpass = lowpass + MULT(fmult, bandpass);
-		highpass = ((input + inputprev)>>1) - lowpass - MULT(damp, bandpass);
-		inputprev = input;
-		bandpass = bandpass + MULT(fmult, highpass);
-		lowpasstmp = lowpass;
-		bandpasstmp = bandpass;
-		highpasstmp = highpass;
-		lowpass = lowpass + MULT(fmult, bandpass);
-		highpass = input - lowpass - MULT(damp, bandpass);
-		bandpass = bandpass + MULT(fmult, highpass);
-		lowpasstmp = signed_saturate_rshift(lowpass+lowpasstmp, 16, 13);
-		bandpasstmp = signed_saturate_rshift(bandpass+bandpasstmp, 16, 13);
-		highpasstmp = signed_saturate_rshift(highpass+highpasstmp, 16, 13);
-		*lp++ = lowpasstmp;
-		*bp++ = bandpasstmp;
-		*hp++ = highpasstmp;
-	} while (in < end);
-	state_inputprev = inputprev;
-	state_lowpass = lowpass;
-	state_bandpass = bandpass;
-}
-*/
 
 __inline__ float clamp(float x, float m)
 {
   return min(m,max(-m,x));
 }
 
-void AudioFilterStateVariableF32::update_variable(const float *in,
+void AudioFilterStateVariable_F32::update_variable(const float *in,
 	const float *ctl, float *lp, float *bp, float *hp)
 {
 	const float *end = in + AUDIO_BLOCK_SAMPLES;
-	float input, inputprev, control;
+	float input, inputprev;
 	float lowpass, bandpass, highpass;
 	float lowpasstmp, bandpasstmp, highpasstmp;
 	float fcenter, fmult, damp, octavemult;
@@ -120,13 +81,14 @@ void AudioFilterStateVariableF32::update_variable(const float *in,
 		*bp++ = bandpasstmp;
 		*hp++ = highpasstmp;
 	} while (in < end);
+
 	state_inputprev = inputprev;
 	state_lowpass = lowpass;
 	state_bandpass = bandpass;
 }
 
 
-void AudioFilterStateVariableF32::update(void)
+void AudioFilterStateVariable_F32::update(void)
 {
 	audio_block_f32_t *input_block=NULL, *control_block=NULL;
 	audio_block_f32_t *lowpass_block=NULL, *bandpass_block=NULL, *highpass_block=NULL;
@@ -178,7 +140,7 @@ void AudioFilterStateVariableF32::update(void)
 
 #elif defined(KINETISL)
 
-void AudioFilterStateVariableF32::update(void)
+void AudioFilterStateVariable_F32::update(void)
 {
 	audio_block_f32_t *block;
 

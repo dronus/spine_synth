@@ -56,60 +56,51 @@
 // A21: Audio out left , over 220 ohms, volume pot left, volume pot slider, 100uF  to jack
 // A22: Audio out right, over 220 ohms, volume pot right, 100uF to jack
 
+#include <math.h>
 #include <Audio.h>
-#include <math.h> 
+#include <OpenAudio_ArduinoLibrary.h>
 #include "AudioEffectIntegrator.h"
 #include "AudioFilterVariable.h"
 #include "Capacity.h"
 #include <MIDI.h>
-#include <OpenAudio_ArduinoLibrary.h>
 
 // configure Teensy Audio library node network
-//AudioSynthWaveformDc     dcInt;
-//AudioConvert_I16toF32    dc;
-AudioEffectIntegrator    vcfEnv;
-AudioEffectIntegrator    accEnv;
+AudioEffectIntegrator        vcfEnv;
+AudioEffectIntegrator        accEnv;
 AudioMixer4_F32              vcfMixer;
 AudioSynthWaveform_F32       oscSaw;
 AudioSynthWaveform_F32       oscSquare;
 AudioMixer4_F32              oscMixer;
-AudioFilterStateVariableF32 vcf1;
-AudioFilterStateVariableF32 vcf2;
-AudioEffectIntegrator    vcaEnv;
+AudioFilterStateVariable_F32 vcf1;
+AudioFilterStateVariable_F32 vcf2;
+AudioEffectIntegrator        vcaEnv;
 AudioMixer4_F32              vcaMixer;
-AudioMultiply_F32      vca;
-AudioFilterStateVariableF32 vcaFilter;
-//AudioEffectCompressor_F32 comp;
-AudioConvert_F32toI16    float2Int;
-AudioMixer4              invMixer;
-AudioOutputAnalogStereo  dacs;
-AudioOutputUSB           usbOut;
-//AudioConnection          patchCord0 (dcInt       , 0, dc   , 0);
-//AudioConnection_F32      patchCord0f (dc      , 0, vcfEnv  , 0);
-AudioConnection_F32          patchCord31(oscSaw   , 0, oscMixer, 0);
-AudioConnection_F32          patchCord32(oscSquare, 0, oscMixer, 1);
-AudioConnection_F32          patchCord33(oscMixer , 0, vcf1    , 0);
-//AudioConnection_F32          patchCord5 (dc       , 0, accEnv  , 0);
-//AudioConnection_F32          patchCord41(dc       , 0, vcfMixer, 0);
-AudioConnection_F32          patchCord42(vcfEnv   , 0, vcfMixer, 0);
-AudioConnection_F32          patchCord6 (accEnv   , 0, vcfMixer, 1);
-AudioConnection_F32          patchCord7 (vcfMixer , 0, vcf1    , 1);
-AudioConnection_F32          patchCord8 (vcf1     , 0, vcf2    , 0);
-AudioConnection_F32          patchCord9 (vcfMixer , 0, vcf2    , 1);
-AudioConnection_F32          patchCord10(vcf2     , 0, vca     , 0);
-//AudioConnection_F32          patchCord11(dc       , 0, vcaEnv  , 0);
-AudioConnection_F32          patchCord12(vcaEnv   , 0, vcaMixer, 0);
-AudioConnection_F32          patchCord13(accEnv   , 0, vcaMixer, 1);
-AudioConnection_F32          patchCord14(vcaMixer , 0, vca     , 1);
-AudioConnection_F32          patchCord22(vca, 0, vcaFilter,0);
-//AudioConnection_F32          patchCord21(vcaFilter      , 0, comp,0);
-//AudioConnection_F32      patchCord24(comp     , 0, float2Int,0);
-AudioConnection_F32      patchCord24(vcaFilter     , 0, float2Int,0);
-AudioConnection          patchCord15(float2Int, 0, invMixer, 0);
-AudioConnection          patchCord19(float2Int, 0, dacs    , 0);
-AudioConnection          patchCord20(invMixer , 0, dacs    , 1);
-AudioConnection          patchCord16(float2Int, 0, usbOut  , 0);
-AudioConnection          patchCord17(float2Int , 0, usbOut  , 1);
+AudioMultiply_F32            vca;
+AudioFilterStateVariable_F32 vcaFilter;
+AudioConvert_F32toI16        float2Int;
+AudioMixer4                  invMixer;
+AudioOutputAnalogStereo      dacs;
+AudioOutputUSB               usbOut;
+
+AudioConnection_F32          patchCord0 (oscSaw   , 0, oscMixer , 0);
+AudioConnection_F32          patchCord1 (oscSquare, 0, oscMixer , 1);
+AudioConnection_F32          patchCord2 (oscMixer , 0, vcf1     , 0);
+AudioConnection_F32          patchCord3 (vcfEnv   , 0, vcfMixer , 0);
+AudioConnection_F32          patchCord4 (accEnv   , 0, vcfMixer , 1);
+AudioConnection_F32          patchCord5 (vcfMixer , 0, vcf1     , 1);
+AudioConnection_F32          patchCord6 (vcf1     , 0, vcf2     , 0);
+AudioConnection_F32          patchCord7 (vcfMixer , 0, vcf2     , 1);
+AudioConnection_F32          patchCord8 (vcf2     , 0, vca      , 0);
+AudioConnection_F32          patchCord9 (vcaEnv   , 0, vcaMixer , 0);
+AudioConnection_F32          patchCord10(accEnv   , 0, vcaMixer , 1);
+AudioConnection_F32          patchCord11(vcaMixer , 0, vca      , 1);
+AudioConnection_F32          patchCord12(vca      , 0, vcaFilter ,0);
+AudioConnection_F32          patchCord13(vcaFilter, 0, float2Int ,0);
+AudioConnection              patchCord14(float2Int, 0, invMixer , 0);
+AudioConnection              patchCord15(float2Int, 0, dacs     , 0);
+AudioConnection              patchCord16(invMixer , 0, dacs     , 1);
+AudioConnection              patchCord17(float2Int, 0, usbOut   , 0);
+AudioConnection              patchCord18(float2Int, 0, usbOut   , 1);
 
 // MIDI interface
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
@@ -138,30 +129,20 @@ void setup(void)
   Serial.begin(9600);
 
   AudioMemory(32);
-//  dcInt.amplitude(1.0f);
+  AudioMemory_F32(64);
   oscSaw.begin(WAVEFORM_SAWTOOTH);
   oscSaw.amplitude(1.f);
   oscSquare.begin(WAVEFORM_SQUARE);
   oscSquare.amplitude(1.f);  
   vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
-  //vcfMixer.gain(2,1.f); // accent is always mixed in, it is just not pulsed any time. 
+  vcfMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
   vcf1.octaveControl(7.f);
   vcf2.octaveControl(7.f);
   vcaEnv.attack(3.0f);
   vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
-  vcaFilter.frequency(5000.f);
-
-  AudioMemory_F32(64);
-/*  comp.enableHPFilter(false);
-  comp.setThresh_dBFS(-50.f);
-  comp.setCompressionRatio(5.f);
-  float fs_Hz = AUDIO_SAMPLE_RATE;
-  comp.setAttack_sec (0.1f, fs_Hz);
-  comp.setRelease_sec(1.f, fs_Hz);
-  comp.setPreGain_dB(0.f);
-*/
+  vcaFilter.frequency(5000.f);  
   invMixer.gain(0,-1.f);
   dacs.analogReference(INTERNAL);
 
@@ -208,14 +189,9 @@ void loop()
 {
   long time;
   long dt=0;
-  // keep almost constant loop timing
-  // and update cycle time (time into current sequence step)
-//  while(dt<5)
-  {
-    time=millis();
-    dt=time-last_time;
-    delay(1);
-  }
+  // update cycle time (time into current sequence step)
+  time=millis();
+  dt=time-last_time;
   cycle+=dt;
   last_time = time;
 
@@ -396,7 +372,6 @@ void loop()
   if(frequency) oscSaw   .frequency(frequency);
   if(frequency) oscSquare.frequency(frequency);
   vcfMixer.gain(0,filter_mod);
-  vcfMixer.gain(1,1.f);
   vcf1.resonance(filter_resonance);
   vcf1.frequency(filter_cutoff);
   vcf2.resonance(filter_resonance);

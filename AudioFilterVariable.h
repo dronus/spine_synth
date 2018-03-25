@@ -30,10 +30,10 @@
 #include "Arduino.h"
 #include "AudioStream_F32.h"
 
-class AudioFilterStateVariableF32: public AudioStream_F32
+class AudioFilterStateVariable_F32: public AudioStream_F32
 {
 public:
-	AudioFilterStateVariableF32() : AudioStream_F32(2, inputQueueArray) {
+	AudioFilterStateVariable_F32() : AudioStream_F32(2, inputQueueArray) {
 		frequency(1000);
 		octaveControl(1.0); // default values
 		resonance(0.707);
@@ -65,8 +65,6 @@ public:
 	}
 	virtual void update(void);
 private:
-/*	void update_fixed(const float *in,
-		float *lp, float *bp, float *hp);*/
 	void update_variable(const float *in, const float *ctl,
 		float *lp, float *bp, float *hp);
 	float setting_fcenter;
