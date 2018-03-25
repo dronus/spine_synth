@@ -68,9 +68,9 @@ void AudioFilterStateVariable::update_fixed(const int16_t *in,
 }
 */
 
-__inline__ float clamp(float x)
+__inline__ float clamp(float x, float m)
 {
-  return min(1.f,max(-1.f,x));
+  return min(m,max(-m,x));
 }
 
 void AudioFilterStateVariableF32::update_variable(const float *in,
@@ -90,8 +90,8 @@ void AudioFilterStateVariableF32::update_variable(const float *in,
 	bandpass = state_bandpass;
   int i=0;
 	// compute fmult using control input, fcenter and octavemult
-  float fmult0=clamp(ctl ? exp2f(octavemult * ctl[0                    ])*fcenter : fcenter);
-  float fmult1=clamp(ctl ? exp2f(octavemult * ctl[AUDIO_BLOCK_SAMPLES-1])*fcenter : fcenter);
+  float fmult0=clamp(ctl ? exp2f(octavemult * ctl[0                    ])*fcenter : fcenter, 0.8f);
+  float fmult1=clamp(ctl ? exp2f(octavemult * ctl[AUDIO_BLOCK_SAMPLES-1])*fcenter : fcenter, 0.8f);
 	do {
     float t=((float)i++)/AUDIO_BLOCK_SAMPLES;
     fmult=(1.f-t)*fmult0 + t*fmult1;
@@ -107,18 +107,18 @@ void AudioFilterStateVariableF32::update_variable(const float *in,
 		lowpass = lowpass + fmult * bandpass;
 		highpass = input - lowpass - damp * bandpass;
 		bandpass = bandpass + fmult * highpass;
-/*
-    lowpass=clamp(lowpass);
-    bandpass=clamp(bandpass);
-    highpass=clamp(highpass);
-*/
+
+    lowpass= clamp(lowpass ,5.f);
+    bandpass=clamp(bandpass,5.f);
+    highpass=clamp(highpass,5.f);
+
 		lowpasstmp =  (lowpass+lowpasstmp)  /2.f;
 		bandpasstmp = (bandpass+bandpasstmp)/2.f;
 		highpasstmp = (highpass+highpasstmp)/2.f;
     
-		*lp++ = clamp(lowpasstmp);
-		*bp++ = clamp(bandpasstmp);
-		*hp++ = clamp(highpasstmp);
+		*lp++ = lowpasstmp;
+		*bp++ = bandpasstmp;
+		*hp++ = highpasstmp;
 	} while (in < end);
 	state_inputprev = inputprev;
 	state_lowpass = lowpass;

@@ -65,8 +65,8 @@
 #include <OpenAudio_ArduinoLibrary.h>
 
 // configure Teensy Audio library node network
-AudioSynthWaveformDc     dcInt;
-AudioConvert_I16toF32    dc;
+//AudioSynthWaveformDc     dcInt;
+//AudioConvert_I16toF32    dc;
 AudioEffectIntegrator    vcfEnv;
 AudioEffectIntegrator    accEnv;
 AudioMixer4_F32              vcfMixer;
@@ -84,20 +84,20 @@ AudioConvert_F32toI16    float2Int;
 AudioMixer4              invMixer;
 AudioOutputAnalogStereo  dacs;
 AudioOutputUSB           usbOut;
-AudioConnection          patchCord0 (dcInt       , 0, dc   , 0);
-AudioConnection_F32      patchCord0f (dc      , 0, vcfEnv  , 0);
+//AudioConnection          patchCord0 (dcInt       , 0, dc   , 0);
+//AudioConnection_F32      patchCord0f (dc      , 0, vcfEnv  , 0);
 AudioConnection_F32          patchCord31(oscSaw   , 0, oscMixer, 0);
 AudioConnection_F32          patchCord32(oscSquare, 0, oscMixer, 1);
 AudioConnection_F32          patchCord33(oscMixer , 0, vcf1    , 0);
-AudioConnection_F32          patchCord5 (dc       , 0, accEnv  , 0);
-AudioConnection_F32          patchCord41(dc       , 0, vcfMixer, 0);
-AudioConnection_F32          patchCord42(vcfEnv   , 0, vcfMixer, 1);
-AudioConnection_F32          patchCord6 (accEnv   , 0, vcfMixer, 2);
+//AudioConnection_F32          patchCord5 (dc       , 0, accEnv  , 0);
+//AudioConnection_F32          patchCord41(dc       , 0, vcfMixer, 0);
+AudioConnection_F32          patchCord42(vcfEnv   , 0, vcfMixer, 0);
+AudioConnection_F32          patchCord6 (accEnv   , 0, vcfMixer, 1);
 AudioConnection_F32          patchCord7 (vcfMixer , 0, vcf1    , 1);
 AudioConnection_F32          patchCord8 (vcf1     , 0, vcf2    , 0);
 AudioConnection_F32          patchCord9 (vcfMixer , 0, vcf2    , 1);
 AudioConnection_F32          patchCord10(vcf2     , 0, vca     , 0);
-AudioConnection_F32          patchCord11(dc       , 0, vcaEnv  , 0);
+//AudioConnection_F32          patchCord11(dc       , 0, vcaEnv  , 0);
 AudioConnection_F32          patchCord12(vcaEnv   , 0, vcaMixer, 0);
 AudioConnection_F32          patchCord13(accEnv   , 0, vcaMixer, 1);
 AudioConnection_F32          patchCord14(vcaMixer , 0, vca     , 1);
@@ -109,7 +109,7 @@ AudioConnection          patchCord15(float2Int, 0, invMixer, 0);
 AudioConnection          patchCord19(float2Int, 0, dacs    , 0);
 AudioConnection          patchCord20(invMixer , 0, dacs    , 1);
 AudioConnection          patchCord16(float2Int, 0, usbOut  , 0);
-AudioConnection          patchCord17(invMixer , 0, usbOut  , 1);
+AudioConnection          patchCord17(float2Int , 0, usbOut  , 1);
 
 // MIDI interface
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, MIDI);
@@ -138,13 +138,13 @@ void setup(void)
   Serial.begin(9600);
 
   AudioMemory(32);
-  dcInt.amplitude(1.0f);
+//  dcInt.amplitude(1.0f);
   oscSaw.begin(WAVEFORM_SAWTOOTH);
-  oscSaw.amplitude(1.0f);
+  oscSaw.amplitude(1.f);
   oscSquare.begin(WAVEFORM_SQUARE);
-  oscSquare.amplitude(1.0f);  
+  oscSquare.amplitude(1.f);  
   vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
-  vcfMixer.gain(2,1.f); // accent is always mixed in, it is just not pulsed any time. 
+  //vcfMixer.gain(2,1.f); // accent is always mixed in, it is just not pulsed any time. 
   vcf1.octaveControl(7.f);
   vcf2.octaveControl(7.f);
   vcaEnv.attack(3.0f);
@@ -395,8 +395,8 @@ void loop()
   AudioNoInterrupts();
   if(frequency) oscSaw   .frequency(frequency);
   if(frequency) oscSquare.frequency(frequency);
-  vcfMixer.gain(0,-filter_mod); // negative bias, filter_mod/2 would give better symmetric modulation response, but accent modulation may clip then.
-  vcfMixer.gain(1,filter_mod);
+  vcfMixer.gain(0,filter_mod);
+  vcfMixer.gain(1,1.f);
   vcf1.resonance(filter_resonance);
   vcf1.frequency(filter_cutoff);
   vcf2.resonance(filter_resonance);
@@ -406,7 +406,7 @@ void loop()
   AudioInterrupts();
 
   // print CPU, memory usage and timing informations
-  
+  /*
     Serial.print("Proc = ");
     Serial.print(AudioProcessorUsage());
     Serial.print(" (");    
@@ -417,6 +417,6 @@ void loop()
     Serial.print(AudioMemoryUsageMax());
     Serial.println(")");
   
-   Serial.println(dt);
- 
+    Serial.println(dt);
+ */
 }

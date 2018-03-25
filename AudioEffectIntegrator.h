@@ -64,9 +64,12 @@ public:
 	}
 	virtual void update(void)	{
 	  float *p, *end;
-
+    bool has_input=true;
 	  audio_block_f32_t* block = receiveWritable_f32();
-	  if (!block) return;
+	  if (!block){
+      block=AudioStream_F32::allocate_f32();
+      has_input=false;
+    }
 
 	  p = block->data;
 	  end = p + AUDIO_BLOCK_SAMPLES;
@@ -77,7 +80,11 @@ public:
       float de=energy_in*attack_flow;      
       energy    = energy*decay_valve + de;
       energy_in = energy_in          - de;
-      (*p++)*=clamp(energy);
+
+      if(has_input)
+        (*p++)*=clamp(energy);
+      else
+        (*p++)=clamp(energy);
 	  }
 	  AudioStream_F32::transmit(block);
 	  AudioStream_F32::release(block);
