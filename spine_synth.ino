@@ -60,7 +60,7 @@
 #include <Audio.h>
 #include <OpenAudio_ArduinoLibrary.h>
 #include "AudioEffectIntegrator.h"
-#include "AudioFilterVariable.h"
+#include "filter_variable_f32.h"
 #include "Capacity.h"
 #include <MIDI.h>
 

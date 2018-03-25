@@ -1,5 +1,6 @@
 /* Audio Library for Teensy 3.X
  * Copyright (c) 2014, Paul Stoffregen, paul@pjrc.com
+ * Copyright (c) 2018, Paul Geisler
  *
  * Development of this audio library was funded by PJRC.COM, LLC by sales of
  * Teensy and Audio Adaptor boards.  Please support PJRC's efforts to develop
@@ -24,8 +25,9 @@
  * THE SOFTWARE.
  */
 
-#include "AudioFilterVariable.h"
+#include "filter_variable_f32.h"
 #include <AudioStream_F32.h>
+#include <math.h>
 
 #if defined(KINETISK)
 
@@ -51,12 +53,15 @@ void AudioFilterStateVariable_F32::update_variable(const float *in,
 	bandpass = state_bandpass;
   int i=0;
 	// compute fmult using control input, fcenter and octavemult
+  // fmult is linearly interpolated across AUDIO_BLOCK_SAMPLES.
+  // as an exp2f call is not feasable for every single sample, 
+  // it consumes too much CPU cycles on Teensy 3.5 to allow for multiple filters.
   float fmult0=clamp(ctl ? exp2f(octavemult * ctl[0                    ])*fcenter : fcenter, 0.8f);
   float fmult1=clamp(ctl ? exp2f(octavemult * ctl[AUDIO_BLOCK_SAMPLES-1])*fcenter : fcenter, 0.8f);
 	do {
     float t=((float)i++)/AUDIO_BLOCK_SAMPLES;
     fmult=(1.f-t)*fmult0 + t*fmult1;
-		// now do the state variable filter as normal, using fmult
+
 		input = *in++;
 		lowpass = lowpass + fmult * bandpass;
 		highpass = (input + inputprev)/2.f - lowpass - damp * bandpass;
@@ -69,9 +74,9 @@ void AudioFilterStateVariable_F32::update_variable(const float *in,
 		highpass = input - lowpass - damp * bandpass;
 		bandpass = bandpass + fmult * highpass;
 
-    lowpass= clamp(lowpass ,5.f);
-    bandpass=clamp(bandpass,5.f);
-    highpass=clamp(highpass,5.f);
+    lowpass= clamp(lowpass ,setting_limit);
+    bandpass=clamp(bandpass,setting_limit);
+    highpass=clamp(highpass,setting_limit);
 
 		lowpasstmp =  (lowpass+lowpasstmp)  /2.f;
 		bandpasstmp = (bandpass+bandpasstmp)/2.f;
@@ -121,12 +126,12 @@ void AudioFilterStateVariable_F32::update(void)
 		return;
 	}
 
-		update_variable(input_block->data,
-			 control_block ? control_block->data : NULL, 
-			 lowpass_block->data,
-			 bandpass_block->data,
-			 highpass_block->data);
-		AudioStream_F32::release(control_block);
+  update_variable(input_block->data,
+	   control_block ? control_block->data : NULL, 
+	   lowpass_block->data,
+	   bandpass_block->data,
+	   highpass_block->data);
+	AudioStream_F32::release(control_block);
 
 	AudioStream_F32::release(input_block);
 	AudioStream_F32::transmit(lowpass_block, 0);

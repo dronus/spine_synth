@@ -24,8 +24,8 @@
  * THE SOFTWARE.
  */
 
-#ifndef filter_variable_float_h_
-#define filter_variable_float_h_
+#ifndef filter_variable_f32_h_
+#define filter_variable_f32_h_
 
 #include "Arduino.h"
 #include "AudioStream_F32.h"
@@ -37,6 +37,7 @@ public:
 		frequency(1000);
 		octaveControl(1.0); // default values
 		resonance(0.707);
+    limit(5.f);
 		state_inputprev = 0;
 		state_lowpass = 0;
 		state_bandpass = 0;
@@ -45,9 +46,6 @@ public:
 		if (freq < 20.0) freq = 20.0;
 		else if (freq > AUDIO_SAMPLE_RATE_EXACT/2.5) freq = AUDIO_SAMPLE_RATE_EXACT/2.5;
 		setting_fcenter = (freq * (3.141592654/(AUDIO_SAMPLE_RATE_EXACT*2.0)));
-		// TODO: should we use an approximation when freq is not a const,
-		// so the sinf() function isn't linked?
-		setting_fmult = sinf(freq * (3.141592654/(AUDIO_SAMPLE_RATE_EXACT*2.0)));
 	}
 	void resonance(float q) {
 		if (q < 0.5) q = 0.5;
@@ -63,14 +61,21 @@ public:
 		else if (n > 6.9999) n = 6.9999;
 		setting_octavemult = n;
 	}
+
+  void limit(float l)
+  {
+    if(l<0.f) l=0.f;
+    setting_limit=l;
+  }
+
 	virtual void update(void);
 private:
 	void update_variable(const float *in, const float *ctl,
 		float *lp, float *bp, float *hp);
 	float setting_fcenter;
-	float setting_fmult;
 	float setting_octavemult;
 	float setting_damp;
+  float setting_limit;
 	float state_inputprev;
 	float state_lowpass;
 	float state_bandpass;
