@@ -365,6 +365,9 @@ void loop()
   float filter_cutoff    =(1.f-log2f(1024.f-analogs[1]*1023.f)/10.f)*4096.0f; // emulate log pot
   float filter_resonance =analogs[2]*4.0f;
   float filter_mod       =analogs[3]*1.0f;
+  // bias filter_cutoff by filter_mod. We had an bias of -1 on the vcfMixer in the past,
+  // resulting in a cutoff that closed fully even with filter_mod employed.
+  filter_cutoff*=exp2f(1.f-filter_mod*7.f);
   float oscMix           =analogs[0];
 
   // update synthesis parameters.

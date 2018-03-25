@@ -18,11 +18,6 @@
 
 #include "AudioStream_F32.h"
 
-__inline__ float clamp(float x)
-{
-  return min(1.f,max(-1.f,x));
-}
-
 class AudioEffectIntegrator : public AudioStream_F32
 {
 public:
@@ -82,9 +77,9 @@ public:
       energy_in = energy_in          - de;
 
       if(has_input)
-        (*p++)*=clamp(energy);
+        (*p++)*=energy;
       else
-        (*p++)=clamp(energy);
+        (*p++)=energy;
 	  }
 	  AudioStream_F32::transmit(block);
 	  AudioStream_F32::release(block);
