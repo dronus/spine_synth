@@ -60,7 +60,7 @@
 #include <Audio.h>
 #include <OpenAudio_ArduinoLibrary.h>
 #include "AudioEffectIntegrator.h"
-#include "filter_variable_f32.h"
+#include "filter_moog_f32.h"
 #include "Capacity.h"
 #include <MIDI.h>
 
@@ -71,12 +71,10 @@ AudioMixer4_F32              vcfMixer;
 AudioSynthWaveform_F32       oscSaw;
 AudioSynthWaveform_F32       oscSquare;
 AudioMixer4_F32              oscMixer;
-AudioFilterStateVariable_F32 vcf1;
-AudioFilterStateVariable_F32 vcf2;
+AudioFilterMoog_F32 vcf1;
 AudioEffectIntegrator        vcaEnv;
 AudioMixer4_F32              vcaMixer;
 AudioMultiply_F32            vca;
-AudioFilterStateVariable_F32 vcaFilter;
 AudioConvert_F32toI16        float2Int;
 AudioMixer4                  invMixer;
 AudioOutputAnalogStereo      dacs;
@@ -88,14 +86,11 @@ AudioConnection_F32          patchCord2 (oscMixer , 0, vcf1     , 0);
 AudioConnection_F32          patchCord3 (vcfEnv   , 0, vcfMixer , 0);
 AudioConnection_F32          patchCord4 (accEnv   , 0, vcfMixer , 1);
 AudioConnection_F32          patchCord5 (vcfMixer , 0, vcf1     , 1);
-AudioConnection_F32          patchCord6 (vcf1     , 0, vcf2     , 0);
-AudioConnection_F32          patchCord7 (vcfMixer , 0, vcf2     , 1);
-AudioConnection_F32          patchCord8 (vcf2     , 0, vca      , 0);
+AudioConnection_F32          patchCord8 (vcf1     , 0, vca      , 0);
 AudioConnection_F32          patchCord9 (vcaEnv   , 0, vcaMixer , 0);
 AudioConnection_F32          patchCord10(accEnv   , 0, vcaMixer , 1);
 AudioConnection_F32          patchCord11(vcaMixer , 0, vca      , 1);
-AudioConnection_F32          patchCord12(vca      , 0, vcaFilter ,0);
-AudioConnection_F32          patchCord13(vcaFilter, 0, float2Int ,0);
+AudioConnection_F32          patchCord12(vca      , 0, float2Int ,0);
 AudioConnection              patchCord14(float2Int, 0, invMixer , 0);
 AudioConnection              patchCord15(float2Int, 0, dacs     , 0);
 AudioConnection              patchCord16(invMixer , 0, dacs     , 1);
@@ -137,12 +132,10 @@ void setup(void)
   vcfEnv.attack(3.0f); // attack as by TB-303, decay is variable
   vcfMixer.gain(1,1.f); // accent is always mixed in, it is just not pulsed any time. 
   vcf1.octaveControl(7.f);
-  vcf2.octaveControl(7.f);
   vcaEnv.attack(3.0f);
   vcaEnv.decay(3000.f); // "TB-303 VEG has 3s decay" (Devilfish docs)    sounds ugly, why? tones keep on muffled for very long time
   vcaMixer.gain(0,0.5f);
   vcaMixer.gain(1,0.5f);
-  vcaFilter.frequency(5000.f);  
   invMixer.gain(0,-1.f);
   dacs.analogReference(INTERNAL);
 
@@ -377,8 +370,8 @@ void loop()
   vcfMixer.gain(0,filter_mod);
   vcf1.resonance(filter_resonance);
   vcf1.frequency(filter_cutoff);
-  vcf2.resonance(filter_resonance);
-  vcf2.frequency(filter_cutoff);
+//  vcf2.resonance(filter_resonance);
+//  vcf2.frequency(filter_cutoff);
   oscMixer.gain(0,1.-oscMix);
   oscMixer.gain(1,   oscMix);
   AudioInterrupts();
