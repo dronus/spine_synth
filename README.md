@@ -20,3 +20,11 @@ We do not try to match the sound of the original device, but provide the basic q
 of it's sound and unique features the most simple emulations lack.
 
 For details and build instrucions, see comments in spine_synth.ino.
+
+
+Depends on 
+- Teensy 3.5 Teensyduino framework
+- Teensy Audio Library
+- chipaudette's OpenAudio_ArduinoLibrary: https://github.com/chipaudette/OpenAudio_ArduinoLibrary
+- Modified DragonSifus' FP-Audio-lib:  https://github.com/dronus/FP-Audio-lib
+

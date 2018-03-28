@@ -6,7 +6,7 @@
 // 
 // Provides 16bit audio out via USB sound device and 12bit line-out via the internal DAC.
 // 
-// Provides MIDI-in via USB
+// Provides MIDI-in via USB MIDI and DIN connector
 //
 // Several parameters are choosen to behave more or less then a TB-303.
 //
@@ -23,6 +23,13 @@
 // http://www.firstpr.com.au/rwi/dfish/Devil-Fish-Manual.pdf
 // as reference sources for basic operation and parameters.
 //
+// Depends on:
+//
+// Teensy Audio Library coming with Teensy 3.x Teensyduino framework
+// chipaudette's OpenAudio_ArduinoLibrary: https://github.com/chipaudette/OpenAudio_ArduinoLibrary
+// Modified DragonSifus' FP-Audio-lib:  https://github.com/dronus/FP-Audio-lib
+//
+//
 // Hardware needed:
 //
 // 1x Teensy 3.5 or 3.6
@@ -32,7 +39,9 @@
 // 1x stereo audio socket (3.5mm, 6.3mm line or dual RCA)
 // 2x 100uF 5v min. electrolytic capacitor
 //
+//
 // Pinout:
+//
 //  0 : Send pin for capacitive touch keyboard. Connect to all keys via 1M resistors
 // 1-8: Lower keyboard keys. Connect to 8 keys.
 // 9-12: Octave selector 10 position 4 bit switch to VCC.
